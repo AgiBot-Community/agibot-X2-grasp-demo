@@ -1,0 +1,113 @@
+# 运行与调用
+
+## 启动参数
+
+统一入口：
+
+```bash
+ros2 launch x2_grasp unified_grasp.launch.py \
+  mode:=<apriltag|grounding|auto> execute:=<false|true>
+```
+
+`execute:=false` 会完成感知、目标校验和 IK 规划，但不切换机器人模式，也不发送运动轨迹。
+`execute:=true` 会控制真实机械臂和夹爪。
+
+## AprilTag 模式
+
+```bash
+ros2 launch x2_grasp unified_grasp.launch.py \
+  mode:=apriltag execute:=false
+```
+
+AprilTag 节点检测 36h11 标签，经 solvePnP 和 TF 转换得到 `base_link` 坐标。只有稳定帧数、
+空间离散度和重投影误差同时满足配置条件时，才发布目标。
+
+```bash
+ros2 topic echo /x2_apriltag/status x2_grasp/msg/PerceptionStatus
+ros2 topic echo /x2_apriltag/target_vector geometry_msgs/msg/Vector3Stamped
+```
+
+## Grounding 模式
+
+```bash
+export ARK_API_KEY='your-api-key'
+ros2 launch x2_grasp unified_grasp.launch.py \
+  mode:=grounding execute:=false
+```
+
+流程为 RGB 图像采集、视觉 API 目标框、同时间戳深度帧、三维定位和 TF 转换。API Key 也可
+放在权限受限的 `~/.x2_arm/api_key.yaml`：
+
+```yaml
+api_key: "your-api-key"
+```
+
+## 自动仲裁模式
+
+```bash
+export ARK_API_KEY='your-api-key'
+ros2 launch x2_grasp unified_grasp.launch.py \
+  mode:=auto execute:=false
+```
+
+每个 goal 先短暂检查新鲜 AprilTag 坐标。检测不到时，才启动 Grounding 请求。这个选择只在
+goal 开始时进行，不会在机械臂执行中切换感知来源。
+
+## Action 调用
+
+```bash
+ros2 action send_goal /x2_grasp/grasp x2_grasp/action/Grasp \
+  "{target: cup}" --feedback
+```
+
+默认标准目标为：
+
+| 目标 | 说明 |
+| --- | --- |
+| `cup` | 纸杯 |
+| `bread` | 面包 |
+| `bottle` | 药瓶或瓶装物体 |
+
+目标名称、Grounding 描述、别名、夹爪闭合值和音频文件均由统一配置的 `target_*` 数组
+定义。客户端应使用配置中的标准名称。已有 goal 执行时，第二个 goal 会被拒绝。
+
+## Python Demo
+
+```bash
+python3 example/send_grasp_goal.py cup
+python3 example/send_grasp_goal.py bottle --cancel-after 5
+```
+
+安装后的等价客户端：
+
+```bash
+ros2 run x2_grasp grasp_action_client bread
+```
+
+## 取消语义
+
+客户端通过 `cancel_goal_async()` 请求取消。服务端会在等待感知、重试、IK、模式切换和轨迹点
+之间检查请求。取消不会撤销已经发送的硬件命令，也不能强制中断正在执行的同步服务调用。
+
+## 真机执行清单
+
+1. 在目标机器人上完成依赖安装、构建和完整测试。
+2. 用 `execute:=false` 分别验证所有需要使用的目标和感知模式。
+3. 检查目标 frame 为 `base_link`、单位为米、坐标在右臂可达域内。
+4. 检查 AprilTag 尺寸、相机内参、深度尺度和 TF。
+5. 清空机械臂工作空间，确认急停、夹爪和 AimDK 控制模式正常。
+6. 使用 `execute:=true` 启动，先执行单个低风险目标。
+
+```bash
+ros2 launch x2_grasp unified_grasp.launch.py \
+  mode:=apriltag execute:=true
+```
+
+## 运行观察
+
+```bash
+ros2 action info /x2_grasp/grasp
+ros2 node list
+ros2 topic hz /x2_apriltag/status
+ros2 topic echo /x2_rgbd_localizer/status x2_grasp/msg/PerceptionStatus
+```
