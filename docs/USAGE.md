@@ -38,6 +38,11 @@ ros2 launch x2_grasp unified_grasp.launch.py \
 流程为 RGB 图像采集、视觉 API 目标框、同时间戳深度帧、三维定位和 TF 转换。API Key 也可
 放在权限受限的 `~/.x2_arm/api_key.yaml`：
 
+Grounding 使用火山方舟远端 API。RGB 图像会编码为 JPEG 并通过 HTTPS 发送到 `base_url`
+配置的服务端，目标检测模型不在机器人本地运行。远端只返回二维框；深度定位、TF、IK 和
+运动控制仍在本地完成。涉及隐私或禁止图像外发的部署应使用 `mode:=apriltag`。`auto` 模式在
+找不到 AprilTag 时仍会调用远端 API。
+
 ```yaml
 api_key: "your-api-key"
 ```

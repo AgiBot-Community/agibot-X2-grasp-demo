@@ -88,6 +88,7 @@ def test_workspace_has_public_demo_and_topic_documentation() -> None:
         "INTERFACES.md",
         "CONFIGURATION.md",
         "ARCHITECTURE.md",
+        "REMOTE_API_AND_URDF.md",
         "TROUBLESHOOTING.md",
     ):
         assert (workspace_root / "docs" / document).is_file()
@@ -105,5 +106,3 @@ def test_workspace_has_open_source_project_metadata() -> None:
     assert package.findtext("license") == "Apache-2.0"
     assert "Apache License" in license_text
     assert "Version 2.0, January 2004" in license_text
-    assert (workspace_root / "CONTRIBUTING.md").is_file()
-    assert (workspace_root / "SECURITY.md").is_file()

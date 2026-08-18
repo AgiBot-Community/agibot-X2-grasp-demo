@@ -8,6 +8,10 @@
 - `sudo`、`apt-get`、`colcon` 和 C++17 编译工具链
 - RGB-D 相机驱动及机器人 URDF/TF
 
+仓库已经内置一份用于 Demo IK 的简化 X2 URDF，因此不强制依赖额外 description 包。但相机
+TF 和真机 frame 必须由机器人运行环境提供。内置模型不是完整官方描述，具体限制见
+[远端 API 与内置 URDF](REMOTE_API_AND_URDF.md)。
+
 不要通过 pip 安装 Pinocchio。Pinocchio、eigenpy 和 ROS Python 绑定必须与目标机器人的 ROS
 发行版、Python ABI 和 CPU 架构一致。
 

@@ -11,6 +11,11 @@ X2 右臂视觉抓取的单一 ROS 2 功能包。包内包含消息接口、公�
 - AprilTag 36h11 定位；
 - Pinocchio IK、机械臂/夹爪控制和完整抓取动作。
 
+其中 Grounding 目标识别使用火山方舟远端 API，RGB 图像会发送到配置的 HTTPS 服务端；
+AprilTag 检测和 RGB-D 三维定位在本地执行。包内同时内置一份面向 Pinocchio IK 的简化 X2
+URDF，不应将其当作包含碰撞、控制器和高保真网格的完整官方机器人描述。详细边界见仓库
+`docs/REMOTE_API_AND_URDF.md`。
+
 ## Grasp Action
 
 所有抓取操作都通过 ROS 2 Action 提交：

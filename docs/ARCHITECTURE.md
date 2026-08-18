@@ -50,6 +50,9 @@ ActionServer 位于独立 ROS 节点和 `MultiThreadedExecutor` 中。主抓取�
 Grounding 请求携带 request ID 和图像时间戳。RGB-D localizer 在请求入队时保留对应深度帧，
 避免网络 API 返回前普通相机缓存过期。最终只接受时间戳和 request ID 匹配的结果。
 
+Grounding 模型运行在火山方舟远端服务。只有 JPEG RGB 图像、目标描述和请求元数据会发送到
+远端；深度图、关节状态、URDF、IK 结果和硬件控制命令不会发送给识别 API。
+
 AprilTag 使用原始图像像素和相机内参执行 solvePnP，然后通过 TF 转换到 `base_link`。稳定窗口
 同时约束连续帧数、坐标离散度和重投影误差。
 
@@ -60,6 +63,12 @@ AprilTag 使用原始图像像素和相机内参执行 solvePnP，然后通过 T
 
 dry-run 和真机执行共享同一个感知与规划路径，差异只出现在硬件执行边界。这可避免调试路径与
 真实执行路径产生不同规划结果。
+
+## 内置运动学模型
+
+`urdf/x2_ultra_plus_omnipicker_omnipicker.urdf` 是随包安装的简化 Demo URDF，供 Pinocchio
+构建 IK 模型。它主要服务于关节拓扑、机械限位和末端 frame 计算，不等同于完整官方机器人
+description，也不提供环境碰撞、自碰撞、ros2_control 或高保真仿真能力。
 
 ## 取消和失败
 

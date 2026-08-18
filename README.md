@@ -19,7 +19,9 @@
 [![Python](https://img.shields.io/badge/Python-3.10-3776AB.svg)](https://www.python.org/)
 [![C++](https://img.shields.io/badge/C%2B%2B-17-00599C.svg)](https://isocpp.org/)
 
-面向 X2 机器人的 ROS 2 Humble 视觉抓取功能包。项目将 AprilTag 定位、视觉 Grounding、RGB-D 三维定位、Pinocchio IK、机械臂控制和抓取编排整合为一个 `x2_grasp` 包，并通过标准ROS 2 Action 对外提供可反馈、可取消的抓取接口。
+面向 X2 机器人的 ROS 2 Humble 视觉抓取功能包。项目将 AprilTag 定位、视觉 Grounding、
+RGB-D 三维定位、Pinocchio IK、机械臂控制和抓取编排整合为一个 `x2_grasp` 包，并通过标准
+ROS 2 Action 对外提供可反馈、可取消的抓取接口。
 
 > 真机安全提示：首次运行必须保持 `execute:=false`。确认目标坐标、TF、IK 和轨迹均正确后，
 > 才能在清空机械臂工作空间并确认急停可用的前提下启用真实运动。
@@ -32,8 +34,13 @@
 - 强类型 `PerceptionStatus`，不使用 JSON 或字符串拼接状态
 - RGB-D 时间戳关联、深度帧保留、TF 转换和异常重试
 - Pinocchio 多初值 IK、分段笛卡尔路径与真机执行保护
+- 内置面向 Demo IK 的简化 X2 URDF，无需额外 description 包即可试运行
 - 同一时间只执行一个抓取 goal，并在各执行阶段检查取消请求
 - dry-run 与真机执行使用相同规划链路
+
+> Grounding 识别使用火山方舟远端视觉 API，RGB 图像会通过 HTTPS 发送到配置的服务端。
+> AprilTag 模式完全本地运行。内置 URDF 是 IK 用简化模型，不包含完整碰撞、控制和高保真
+> 仿真描述。部署边界详见 [远端 API 与内置 URDF](docs/REMOTE_API_AND_URDF.md)。
 
 ## 系统要求
 
@@ -159,6 +166,7 @@ dry-run result or AimDK arm/hand execution
 | [接口说明](docs/INTERFACES.md) | Action、消息、Topic 和字段语义 |
 | [配置参考](docs/CONFIGURATION.md) | 视觉、IK、轨迹和音频参数 |
 | [架构说明](docs/ARCHITECTURE.md) | 模块职责、线程模型和数据流 |
+| [远端 API 与内置 URDF](docs/REMOTE_API_AND_URDF.md) | 数据外发边界和简化模型适用范围 |
 | [故障排查](docs/TROUBLESHOOTING.md) | 安装、TF、视觉、IK 和执行问题 |
 | [包内说明](src/x2_grasp/README.md) | 功能包级详细说明 |
 
