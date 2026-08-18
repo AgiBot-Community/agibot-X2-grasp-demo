@@ -1,0 +1,13 @@
+builtin_interfaces/Time image_stamp
+bool success
+string source
+string stage
+string detail
+string error
+int32[] detected_ids
+uint32 sample_count
+uint32 required_samples
+float64 spread_m
+float64 reprojection_error_px
+geometry_msgs/Vector3 target
+string frame_id

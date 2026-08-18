@@ -1,0 +1,20 @@
+# colcon outputs
+build/
+install/
+log/
+
+# Python tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+pytest-cache-files-*/
+.coverage
+htmlcov/
+
+# Editors and local environment
+.vscode/
+.idea/
+.env
+
+# Local credentials
+src/x2_grasp/config/api_key.yaml

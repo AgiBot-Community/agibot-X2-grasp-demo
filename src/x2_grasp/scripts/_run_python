@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -lt 1 ]]; then
+  echo "usage: _run_python <module> [arguments...]" >&2
+  exit 64
+fi
+
+module="$1"
+shift
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
+export PYTHONNOUSERSITE=1
+export RMW_IMPLEMENTATION="${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}"
+python_version="$(/usr/bin/python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+install_prefix="$(cd -- "${script_dir}/../.." && pwd)"
+package_site=""
+for candidate in \
+  "${install_prefix}/local/lib/python${python_version}/dist-packages" \
+  "${install_prefix}/lib/python${python_version}/site-packages"; do
+  if [[ -d "${candidate}/x2_grasp" ]]; then
+    package_site="${candidate}"
+    break
+  fi
+done
+if [[ -z "${package_site}" ]]; then
+  echo "x2_grasp installed Python package directory is missing under ${install_prefix}" >&2
+  exit 1
+fi
+export PYTHONPATH="${package_site}${PYTHONPATH:+:${PYTHONPATH}}"
+
+export X2_GRASP_ENTRY_MODULE="${module}"
+exec /usr/bin/python3 -c \
+  'import importlib, os; raise SystemExit(importlib.import_module(os.environ["X2_GRASP_ENTRY_MODULE"]).main())' \
+  "$@"

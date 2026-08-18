@@ -1,0 +1,13 @@
+builtin_interfaces/Time image_stamp
+string request_id
+string target
+string target_zh
+bool success
+string frame_id
+uint32 image_width
+uint32 image_height
+uint32 box_count
+string bbox_selection
+string annotated_image_path
+float64 latency_ms
+string error

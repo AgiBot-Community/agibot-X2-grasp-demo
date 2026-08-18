@@ -1,0 +1,21 @@
+"""Shared constants for the grasp workflow."""
+
+GROUNDING_VECTOR_TOPIC = "/x2_rgbd_localizer/target_vector"
+APRILTAG_VECTOR_TOPIC = "/x2_apriltag/target_vector"
+
+BACKWARD_M = 0.03
+INITIAL_UPWARD_M = 0.15
+GRASP_AXIS_WORLD = [1.0, 0.0, 0.0]
+GRIPPER_REACH_M = 0.10
+TAG_TO_OBJECT_DEPTH_M = 0.03
+APPROACH_STANDOFF_M = 0.12
+GRASP_X_OFFSET_M = 0.05
+GRASP_PLANE_Z_M = 0.262
+UPWARD_AFTER_GRASP_M = 0.06
+
+TARGET_X_RANGE = (0.20, 0.75)
+TARGET_Y_RANGE = (-0.60, 0.10)
+TARGET_Z_RANGE = (-0.10, 0.60)
+GRASP_X_REACHABLE = (0.22, 0.36)
+RIGHT_ARM_Y_MAX = -0.10
+SOURCE_LABELS = {"grounding": "API画框", "apriltag": "ARTag"}

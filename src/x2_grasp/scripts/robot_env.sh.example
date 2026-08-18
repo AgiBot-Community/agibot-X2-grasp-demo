@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Source this file in every terminal used to build or run x2_grasp.
+
+source /opt/ros/humble/setup.bash
+source ~/aimdk/install/setup.bash
+source ~/.aima/env/bashrc
+
+if [[ -f ~/x2_grasp_ws/install/setup.bash ]]; then
+  source ~/x2_grasp_ws/install/setup.bash
+fi
+
+echo "[x2_grasp] ROS_DISTRO=${ROS_DISTRO:-unset}"
+echo "[x2_grasp] pinocchio=$(python3 -c 'import pinocchio; print(pinocchio.__version__)')"
+echo "[x2_grasp] aimdk_msgs=$(python3 -c 'import aimdk_msgs; print(aimdk_msgs.__file__)')"

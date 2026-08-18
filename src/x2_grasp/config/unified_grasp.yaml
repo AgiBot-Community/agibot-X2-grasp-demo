@@ -1,0 +1,130 @@
+/**:
+  ros__parameters:
+    # Arrays are positional: every index describes one configurable grasp type.
+    target_names: [cup, bread, bottle]
+    target_descriptions:
+      - 一次性纸杯
+      - 长条的玉米面包，半透明平口塑料袋用扎丝封口的长条吐司面包
+      - 长条药瓶
+    # Aliases use alias=canonical_name syntax.
+    target_aliases: [paper_cup=cup, medicine_bottle=bottle]
+    target_grip_close_positions: [0.10, 0.10, 0.10]
+    # Empty or unreadable type-specific audio falls back to default_pcm_path.
+    target_pcm_paths: [cup.pcm, bread.pcm, bottle.pcm]
+    default_pcm_path: grasp_complete.pcm
+
+x2_rgbd_localizer:
+  ros__parameters:
+    rgb_image_topic: /aima/hal/sensor/rgbd_head_front/rgb_image
+    depth_image_topic: /aima/hal/sensor/rgbd_head_front/depth_image
+    rgb_camera_info_topic: /aima/hal/sensor/rgbd_head_front/rgb_camera_info
+    depth_camera_info_topic: /aima/hal/sensor/rgbd_head_front/depth_camera_info
+    bbox_topic: /x2_rgbd_localizer/detection_bbox
+    hold_frame_topic: /x2_grasp/grounding_image_stamp
+    status_topic: /x2_rgbd_localizer/status
+    target_frame: base_link
+    alignment_mode: aligned
+    rgb_coordinate_mode: rectified
+    sync_queue_size: 10
+    held_frame_queue_size: 8
+    sync_slop_sec: 0.04
+    detection_slop_sec: 2.0
+    tf_timeout_sec: 0.20
+    depth_scale: 0.0
+    min_depth_m: 0.05
+    max_depth_m: 20.0
+    center_fraction: 0.20
+    splat_radius: 1
+    software_extrinsics_set: false
+    depth_to_rgb_rotation: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+    depth_to_rgb_translation_m: [0.0, 0.0, 0.0]
+
+x2_grounding:
+  ros__parameters:
+    image_topic: /aima/hal/sensor/rgbd_head_front/rgb_image
+    target_topic: /x2_grasp/grounding_target
+    result_topic: /x2_grasp/grounding_result
+    bbox_topic: /x2_rgbd_localizer/detection_bbox
+    hold_frame_topic: /x2_grasp/grounding_image_stamp
+    bbox_selection: largest
+    model: doubao-seed-2-1-pro-260628
+    base_url: https://ark.cn-beijing.volces.com/api/v3
+    api_key_env: ARK_API_KEY
+    api_key: ""
+    # 密钥不随功能包安装；环境变量为空时再读取用户目录中的私有文件。
+    api_key_file: ~/.x2_arm/api_key.yaml
+    # Shorter than one grasp-node attempt, so a timed-out API call cannot overlap a retry.
+    request_timeout_seconds: 30.0
+    annotated_image_directory: ""
+
+x2_apriltag_detector:
+  ros__parameters:
+    rgb_topic: /aima/hal/sensor/rgbd_head_front/rgb_image
+    rgb_info_topic: /aima/hal/sensor/rgbd_head_front/rgb_camera_info
+    target_topic: /x2_apriltag/target_vector
+    status_topic: /x2_apriltag/status
+    tag_id: 0
+    tag_size_m: 0.080
+    base_frame: base_link
+    camera_frame: ""
+    min_side_pixels: 40.0
+    max_reproj_error_px: 3.0
+    stable_frames: 8
+    max_spread_m: 0.010
+    publish_mode: continuous
+    publish_rate_hz: 2.0
+    reset_after_lost_s: 1.5
+    retrigger_move_m: 0.05
+    detect_rate_hz: 10.0
+    dry_run: false
+    log_every_frame: false
+
+x2_grasp_node:
+  ros__parameters:
+    action_name: /x2_grasp/grasp
+    execute: false
+    source: grounding
+    grounding_command_topic: /x2_grasp/grounding_target
+    arbitration_probe_timeout: 0.5
+    arbitration_tag_freshness: 1.0
+    grounding_result_topic: /x2_grasp/grounding_result
+    localizer_status_topic: /x2_rgbd_localizer/status
+    # API、空检测框、深度无效或 RGB-D 不同步时，重新拍摄并重试。
+    grounding_retry_attempts: 3
+    grounding_retry_delay: 1.0
+    grounding_attempt_timeout: 35.0
+    localization_result_timeout: 5.0
+    vector_topic: /x2_rgbd_localizer/target_vector
+    apriltag_topic: /x2_apriltag/target_vector
+    timeout: 300.0
+    gripper_reach: 0.11
+    tag_depth: 0.03
+    standoff: 0.12
+    backward: 0.03
+    initial_upward: 0.15
+    grasp_x_offset: 0.05
+    grasp_plane_z: 0.262
+    post_grasp_lift: 0.06
+    min_post_grasp_lift: 0.04
+    lift_step: 0.02
+    cartesian_step: 0.015
+    high_retract_position_tolerance: 0.005
+    high_retract_axis_tolerance: 0.05
+    # 只稳定夹爪 +Z 抓取轴到 base_link +X；允许绕抓取轴自由滚转。
+    grasp_axis_orientation_weight: 0.5
+    grasp_axis_orientation_eps: 0.087
+    ik_seed_perturbation: 0.12
+    duration: 4.0
+    approach_duration: 3.0
+    initial_close_seconds: 2.0
+    open_seconds: 0.5
+    grip_close_seconds: 2.0
+    audio_playback_topic: /aima/hal/audio/playback
+    audio_focus_response_topic: /aima/hal/audio/focus_response
+    audio_focus_request_service: /aimdk_5Fmsgs/srv/RequestAudioFocus
+    audio_focus_release_service: /aimdk_5Fmsgs/srv/AbandonAudioFocus
+    audio_pkg_name: x2_grasp
+    audio_focus_priority: 10
+    audio_chunk_ms: 50
+    # 相对路径从已安装功能包的 share/x2_grasp/audio 目录解析。
+    skip_mode_switch: false
