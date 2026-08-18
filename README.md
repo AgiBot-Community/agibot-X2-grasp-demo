@@ -19,12 +19,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10-3776AB.svg)](https://www.python.org/)
 [![C++](https://img.shields.io/badge/C%2B%2B-17-00599C.svg)](https://isocpp.org/)
 
-面向 X2 机器人的 ROS 2 Humble 视觉抓取功能包。项目将 AprilTag 定位、视觉 Grounding、
-RGB-D 三维定位、Pinocchio IK、机械臂控制和抓取编排整合为一个 `x2_grasp` 包，并通过标准
-ROS 2 Action 对外提供可反馈、可取消的抓取接口。
-
-本项目由 [AgiBot-Community](https://github.com/AgiBot-Community) 维护，定位为面向 X2
-机器人视觉抓取开发、验证和二次集成的参考实现。
+面向 X2 机器人的 ROS 2 Humble 视觉抓取功能包。项目将 AprilTag 定位、视觉 Grounding、RGB-D 三维定位、Pinocchio IK、机械臂控制和抓取编排整合为一个 `x2_grasp` 包，并通过标准ROS 2 Action 对外提供可反馈、可取消的抓取接口。
 
 > 真机安全提示：首次运行必须保持 `execute:=false`。确认目标坐标、TF、IK 和轨迹均正确后，
 > 才能在清空机械臂工作空间并确认急停可用的前提下启用真实运动。
@@ -198,17 +193,14 @@ colcon test-result --verbose
 PYTHONPATH=src/x2_grasp python3 -m pytest src/x2_grasp/test
 ```
 
-完整测试需要 ROS 2、AimDK、Pinocchio、OpenCV 和目标机器人消息环境。提交问题或 Pull
-Request 时，请注明实际执行过的测试范围。
+完整测试需要 ROS 2、AimDK、Pinocchio、OpenCV 和目标机器人消息环境。提交问题或 Pull Request 时，请注明实际执行过的测试范围。
 
 ## 配置与凭据
 
 统一配置位于 `src/x2_grasp/config/unified_grasp.yaml`。Grounding 模式优先从
-`ARK_API_KEY` 环境变量读取密钥，也支持权限受限的 `~/.x2_arm/api_key.yaml`。不要把真实密钥
-写入仓库配置文件。
+`ARK_API_KEY` 环境变量读取密钥，也支持权限受限的 `~/.x2_arm/api_key.yaml`。不要把真实密钥写入仓库配置文件。
 
-抓取类型也在该文件顶部统一定义。数组按下标对应，可以直接修改类型、识别描述、别名、夹爪
-闭合值和完成提示音：
+抓取类型也在该文件顶部统一定义。数组按下标对应，可以直接修改类型、识别描述、别名、夹爪闭合值和完成提示音：
 
 ```yaml
 target_names: [cup, bread, bottle, apple]
@@ -223,15 +215,4 @@ default_pcm_path: grasp_complete.pcm
 
 ## 许可证
 
-本项目采用 [Apache License 2.0](LICENSE)。第三方 ROS、AimDK、模型服务和机器人资源仍受
-各自许可证与服务条款约束。
-
-## 参与贡献
-
-欢迎通过 Issue 和 Pull Request 改进感知适配、IK 稳定性、硬件兼容性、测试和文档。开始前
-请阅读 [贡献指南](CONTRIBUTING.md)。安全问题请按 [安全策略](SECURITY.md) 私下报告，不要在
-公开 Issue 中披露机器人凭据或尚未修复的漏洞。
-
-- Issues：<https://github.com/AgiBot-Community/agibot-X2-grasp-demo/issues>
-- Pull Requests：<https://github.com/AgiBot-Community/agibot-X2-grasp-demo/pulls>
-- Security：<https://github.com/AgiBot-Community/agibot-X2-grasp-demo/security>
+本项目采用 [Apache License 2.0](LICENSE)。第三方 ROS、AimDK、模型服务和机器人资源仍受各自许可证与服务条款约束。
