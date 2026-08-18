@@ -1,4 +1,18 @@
-# X2 Grasp
+<p align="center">
+  <a href="https://github.com/AgiBot-Community">
+    <img
+      src="docs/assets/agibot-community.png"
+      alt="AgiBot Community logo"
+      width="152"
+    >
+  </a>
+</p>
+
+<h1 align="center">X2 Grasp</h1>
+
+<p align="center">
+  ROS 2 visual grasping demo for the AgiBot X2 robot
+</p>
 
 [![ROS 2](https://img.shields.io/badge/ROS%202-Humble-22314E.svg)](https://docs.ros.org/en/humble/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
