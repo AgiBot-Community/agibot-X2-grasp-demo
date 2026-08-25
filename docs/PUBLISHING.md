@@ -2,93 +2,111 @@
 
 ## 结论
 
-不是所有 ROS 发布都更适合 C++。本仓库应按数据频率和职责划分：
+机械臂与夹爪的 50 Hz 连续命令流已经迁入独立 rclcpp 节点 `x2_command_publisher`。迁移覆盖
+整段调度和安全边界，不是只包装 `publish()`：
 
-| 发布路径 | 当前实现 | 建议 |
-| --- | --- | --- |
-| RGB-D 对齐图、相机点、目标向量和定位状态 | rclcpp | 保持 C++ |
-| 机械臂 `UpperBodyCommandArray` 50 Hz 命令流 | rclpy + wall-clock sleep | 生产版建议整体迁入 C++ |
-| 夹爪 50 Hz 命令流 | rclpy worker | 与机械臂调度器一起评估 C++ |
-| Grasp Action feedback/result/cancel | rclpy | 保持 Python 编排 |
-| AprilTag、Grounding 和工作流状态 | rclpy | 事件驱动，保持 Python |
-| 音频块与焦点服务 | Python worker + rclpy | 保持 Python，除非实测 underrun |
-| 通用 IK 解和诊断 | rclpy + C++ IK 内核 | 发布频率低，保持现状 |
+- Python 一次提交完整的机械臂起止轨迹或夹爪持续目标；
+- C++ 完成平滑插值和 AimDK 消息构造；
+- 使用 `std::chrono::steady_clock` 和绝对 deadline，避免逐周期累计漂移；
+- 同时只接受一个内部命令 Action，拒绝交错轨迹；
+- cancel 和 watchdog 停止后续帧，并可重发最后命令作为 hold；
+- Result 返回发布帧数、deadline miss、最大延迟和实际耗时。
 
-当前 Python 机械臂发布器适合 Demo、dry-run 后的真机验证和 50 Hz 基本控制，但不应描述为
-实时控制器。C++能减少解释器调度和 GIL 影响，却不能自动提供硬实时保证；Linux 调度策略、
-ROS 2 executor、DDS、控制器缓存和硬件总线仍会影响周期。
+其他事件驱动发布仍保留原职责：Grasp Action、Grounding、感知状态和音频由 Python 编排，
+RGB-D 与定位高带宽链继续由现有 rclcpp 节点负责。C++ 发布减少解释器调度和 GIL 对控制节拍
+的影响，但普通 Linux、ROS executor、DDS 和硬件总线仍不构成硬实时系统。
 
-## 当前机械臂命令链
+## 节点边界
 
 ```text
 Python GraspExecutor
-    -> clip start/goal through native IK limits
-    -> generate smoothstep waypoints
-    -> for each waypoint
-         build AimDK UpperBodyCommandArray
-         publish
-         spin_once(0)
-         wall-clock sleep to next 20 ms period
+    -> clip start/goal through IK limits
+    -> ExecuteCommand Action goal (one complete segment)
+         |
+         v
+C++ x2_command_publisher
+    -> validate command and reject concurrent streams
+    -> smoothstep interpolation
+    -> absolute monotonic deadlines at 50 Hz
+    -> build AimDK arm/hand messages
+    -> publish + collect timing metrics
+    -> cancel/watchdog => stop and optional last-position hold
 ```
 
-取消在每个轨迹点之前检查。已经发布的命令不会撤回，取消也不是急停。当前实现没有独立的
-deadline miss 统计、控制器 watchdog、取消后的显式 hold 命令或发布线程优先级。
+内部 Action 为 `/x2_grasp/execute_command`，类型为 `x2_grasp/action/ExecuteCommand`。它不是
+公共抓取 API；外部业务仍应调用 `/x2_grasp/grasp`。
 
-## 推荐的 C++ 发布器边界
+## 后端选择
 
-迁移时应建立独立 rclcpp `TrajectoryCommandPublisher`，一次接收已经验证的完整 14 关节轨迹，
-而不是让 Python 每个 waypoint 调一次 C++。建议职责如下：
+抓取节点参数 `command_backend` 支持：
 
-1. 验证 14 关节顺序、有限值、时间单调性和轨迹长度上限。
-2. 消费已经应用安全限位的 waypoint，不在发布线程中运行 IK。
-3. 使用单调时钟和绝对 deadline 调度，避免累计 `sleep(period)` 漂移。
-4. 构造并发布 AimDK `UpperBodyCommandArray`，管理 sequence、stamp、source 和 frame。
-5. 使用容量为 1 的有界命令队列，新轨迹不能与旧轨迹交错。
-6. 支持 cancel、shutdown 和超时后的显式 hold/stop 策略。
-7. 记录周期、deadline miss、最大抖动、取消到停止延迟和发布失败。
-8. 将执行结果以 Action、service 或强类型状态返回 Python 编排层。
+| 值 | 行为 |
+| --- | --- |
+| `auto` | 安装目录存在 C++ 节点时启动并连接；否则回退 Python 兼容发布器 |
+| `native` | 必须存在并连接 C++ 节点，否则拒绝启动 |
+| `python` | 强制使用原 Python 发布路径，用于兼容和对照 |
 
-夹爪若要求持续 50 Hz 刷新，可复用同一调度组件；如果 AimDK 控制器接受单次带持续时间的
-夹爪目标，则优先使用控制器契约，不应在上层重复流式发布。
+真机部署门禁应使用：
 
-## 为什么不只迁移 `publish()`
+```bash
+ros2 launch x2_grasp unified_grasp.launch.py \
+  mode:=apriltag ik_backend:=native command_backend:=native execute:=false
+```
 
-单次 rclpy publish 的计算量不是当前主要瓶颈。仅通过 pybind11 包装发布调用会增加 Python/C++
-消息转换，同时仍保留 Python 循环、`time.sleep`、取消检查和序列管理，无法改善核心时序问题。
-有价值的迁移单位是完整的周期调度与安全状态机。
+`execute:=false` 不发送运动，但仍会检查原生节点是否已构建并可连接。
 
-## 构建前置条件
+## 调度与停止
 
-C++ 发布器需要 AimDK 提供可供 ament/CMake 查找的 `aimdk_msgs` C++ typesupport 和准确的
-控制器契约。当前通用 WSL ROS 2 Humble 环境执行：
+机械臂轨迹保持原有 14 关节 smoothstep 规则：时长决定最低帧数，最大关节步长
+`max_delta_per_step` 可以进一步增加帧数。每帧 deadline 相对于该段统一起点计算，而不是在
+上一帧后调用相对 `sleep(period)`。
+
+夹爪命令按同一调度器持续刷新。内部 Action 收到 cancel 时设置 C++ 原子取消标志；调度器在
+下一个 deadline 边界停止。`hold_on_stop=true` 时，取消或 watchdog 会再发布一次最后成功
+命令。该 hold 行为必须与目标固件确认，不能替代控制器 stop 接口或硬件急停。
+
+关键参数位于 `x2_command_publisher.ros__parameters`：
+
+| 参数 | 默认值 | 含义 |
+| --- | --- | --- |
+| `publish_rate_hz` | `50.0` | 机械臂和夹爪发布频率 |
+| `max_delta_per_step` | `0.03` | 单关节 smoothstep 最大步长约束 |
+| `max_duration_seconds` | `30.0` | 单个内部命令段允许的最长时间 |
+| `deadline_tolerance_ms` | `2.0` | 计为 deadline miss 的允许延迟 |
+| `watchdog_ms` | `60.0` | 超过后中止当前命令流 |
+| `hold_on_stop` | `true` | cancel/watchdog 后是否重发最后命令 |
+
+## 条件构建
+
+发布节点直接包含 AimDK C++ 消息头，因此只在 `find_package(aimdk_msgs)` 成功时构建。目标
+机器人必须在构建前 source AimDK：
 
 ```bash
 source /opt/ros/humble/setup.bash
+source ~/aimdk/install/setup.bash
+source ~/.aima/env/bashrc
 ros2 pkg prefix aimdk_msgs
+colcon build --packages-select x2_grasp --symlink-install \
+  --cmake-args -DCMAKE_BUILD_TYPE=Release
+test -x install/x2_grasp/lib/x2_grasp/x2_command_publisher
 ```
 
-结果为 `Package not found`。因此本仓库当前只能在 Python 运行时延迟导入 AimDK 消息，不能在
-该 WSL 环境编译或验证 rclcpp AimDK 发布器。不要为绕过这个缺口复制未知 ABI 的生成头文件。
-
-开始迁移前必须在目标机器人环境确认：
-
-- `ros2 pkg prefix aimdk_msgs` 成功；
-- `UpperBodyCommandArray` 和 hand command 存在 C++ typesupport；
-- 控制器要求的 Topic、QoS、频率、时间戳和序列语义；
-- cancel 时应发送 hold、stop，还是停止刷新；
-- 控制器 watchdog 超时及允许的最大 deadline miss。
+通用 WSL 没有 `aimdk_msgs` 时，CMake 跳过 `x2_command_publisher`，但仍构建内部 Action、调度
+核心和 gtest。不要复制其他 ROS 版本或 CPU 架构生成的 AimDK 头文件和动态库。
 
 ## 验收指标
 
-C++ 发布器完成的证据不能只看“能够编译”。至少应在相同轨迹和系统负载下对比 Python/C++：
+内部 Action Result 已提供以下指标，真机验收还应结合 AimDK 控制器日志：
 
-| 指标 | 采集方式 |
+| 指标 | 含义 |
 | --- | --- |
-| 实际发布周期中位数、P95、P99、最大值 | 发布前后单调时钟打点 |
-| 20 ms deadline miss 数量和比例 | 每个 waypoint 对绝对 deadline |
-| 累计轨迹完成时间误差 | 首末 waypoint 时间差 |
-| cancel 到最后命令/hold 的延迟 | cancel stamp 与发布 stamp |
-| CPU 占用和线程调度延迟 | 同负载下进程和线程统计 |
-| 控制器丢包、watchdog 或拒绝数 | AimDK 控制器日志/状态 |
+| `frames_requested/published` | 计划帧数和实际发送帧数 |
+| `deadline_misses` | 超过允许延迟的帧数 |
+| `max_lateness_ns` | 最差 deadline 延迟 |
+| `elapsed_seconds` | 命令段实际耗时 |
+| `watchdog_triggered` | 是否因严重调度延迟中止 |
+| `hold_published` | 是否执行取消/watchdog 后 hold |
 
-只有这些指标在目标硬件上优于 Python，并且取消、限位和故障行为一致，才应切换生产默认值。
+至少需要对比 Python/C++ 的 P50、P95、P99 和最大周期、累计时长误差、cancel 到最后命令的
+延迟、CPU 占用，以及控制器丢包、watchdog 或拒绝数。只有真机指标和停止行为通过，才应把
+`command_backend:=native` 写入生产启动配置。

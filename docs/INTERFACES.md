@@ -75,15 +75,21 @@ AprilTag 状态话题 `/x2_apriltag/status` 和 RGB-D 状态话题
 | `/x2_ik/right/solution` | `sensor_msgs/msg/JointState` | 右臂目标对应的完整 14 关节解 |
 | `/x2_ik/status` | `diagnostic_msgs/msg/DiagnosticArray` | 求解成功、误差、迭代数和末端 frame |
 
-真机适配层向 `/mc/upper_body_command` 发布 AimDK `UpperBodyCommandArray`，夹爪 API 默认向
-`/aima/hal/joint/hand/command` 发布 AimDK hand command。它们是平台运行时契约，不是本包
-生成的消息；部署前必须核对当前固件中的类型、字段、QoS 和控制器超时。发布所有权和 C++
-迁移边界见 [发布管理](PUBLISHING.md)。
+Python 编排器通过内部 `/x2_grasp/execute_command` Action 将整段命令交给
+`x2_command_publisher`。类型 `x2_grasp/action/ExecuteCommand` 支持机械臂起止 14 关节轨迹和
+左/右/双夹爪持续命令；结果返回发布帧数、deadline miss、最大延迟、总耗时、watchdog 和
+hold 状态。该 Action 是包内执行契约，不应替代公开的 Grasp Action。
+
+C++ 节点向 `/mc/upper_body_command` 发布 AimDK `UpperBodyCommandArray`，并向
+`/aima/hal/joint/hand/command` 发布 AimDK hand command。AimDK 类型是平台运行时契约，不是
+本包生成的消息；部署前必须核对当前固件中的字段、QoS 和控制器超时。详见
+[发布管理](PUBLISHING.md)。
 
 ## 接口检查
 
 ```bash
 ros2 interface show x2_grasp/action/Grasp
+ros2 interface show x2_grasp/action/ExecuteCommand
 ros2 interface show x2_grasp/msg/GroundingCommand
 ros2 interface show x2_grasp/msg/GroundingResult
 ros2 interface show x2_grasp/msg/PerceptionStatus

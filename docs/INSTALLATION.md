@@ -84,6 +84,7 @@ source install/setup.bash
 ```bash
 ros2 pkg prefix x2_grasp
 ros2 interface show x2_grasp/action/Grasp
+ros2 interface show x2_grasp/action/ExecuteCommand
 ros2 interface show x2_grasp/msg/PerceptionStatus
 /usr/bin/python3 -c \
   'from x2_arm import native_backend_available; print(native_backend_available())'
@@ -95,6 +96,17 @@ Python，但性能不符合原生基准。显式要求原生后端可用：
 ```bash
 ros2 run x2_grasp x2_ik_demo --ik-backend native --limits
 ```
+
+目标机器人环境提供 `aimdk_msgs` 时，CMake 会额外构建完整的 rclcpp 发布节点。确认：
+
+```bash
+test -x install/x2_grasp/lib/x2_grasp/x2_command_publisher
+ros2 launch x2_grasp unified_grasp.launch.py \
+  mode:=apriltag ik_backend:=native command_backend:=native execute:=false
+```
+
+通用 WSL 没有 `aimdk_msgs` 时会明确跳过该真机目标，但仍构建 `ExecuteCommand` 接口、C++ 调度
+核心和对应测试。这不代表真机发布节点已经完成 ABI 验证。
 
 每个新终端都需要按 ROS 2、AimDK、当前工作区的顺序 source。
 

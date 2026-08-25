@@ -90,9 +90,10 @@ python3 scripts/benchmark_ik.py --backend native --side right \
 
 ## 保留 Python 的路径
 
-典型 2 秒、50 Hz 的 101 点轨迹插值中位数为 Python 119.618 us、原生 IK
-配置下 123.840 us。该操作只占实际 2 秒发布周期约 0.006%，且输出仍需构造成
-Python/ROS 消息，因此迁移没有实际收益。
+典型 2 秒、50 Hz 的 101 点轨迹插值中位数为 Python 119.618 us、原生 IK 配置下
+123.840 us。单独迁移插值计算没有性能收益；现在它作为完整 `x2_command_publisher` 节点的
+一部分迁入 C++，目的是让插值、消息构造、绝对 deadline、取消、watchdog 和指标处在同一
+执行边界，而不是优化这 0.006% 的计算时间。
 
 8 点链式规划已经包含 Python 的逐点循环、结果封装和跨语言调用。它在原生后端下
 仍达到 15.61x 到 16.21x 加速，说明剩余 Python 编排不是主要瓶颈。保留逐点边界
@@ -100,5 +101,5 @@ Python/ROS 消息，因此迁移没有实际收益。
 开销整体迁入 C++。
 
 这里比较的是数值计算和包含 Python 编排的链式 IK，不代表 ROS 2 控制命令的周期抖动。
-机械臂/夹爪发布器是否迁入 C++应使用控制器节拍、deadline miss、watchdog 和停止延迟评估，
-详见 [发布管理](PUBLISHING.md)。
+机械臂/夹爪发布节点已经迁入 C++，是否切换生产默认值仍应在真机使用控制器节拍、deadline
+miss、watchdog 和停止延迟验收，详见 [发布管理](PUBLISHING.md)。

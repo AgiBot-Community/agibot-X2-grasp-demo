@@ -12,6 +12,8 @@
 | `src/localizer.cpp` | RGB-D 对齐、深度取样和 TF 定位 |
 | `src/ik_solver.cpp` | Pinocchio FK、IK、关节映射和限位数值内核 |
 | `src/ik_bindings.cpp` | pybind11 原生 IK Python 边界 |
+| `src/command_scheduler.cpp` | 绝对 deadline、取消、watchdog 和时序指标 |
+| `src/command_publisher_node.cpp` | 真机 AimDK 机械臂/夹爪 rclcpp 发布节点 |
 | `msg/`、`action/` | ROS 2 强类型契约 |
 
 ## Grasp Action 数据流
@@ -80,14 +82,14 @@ C++ Pinocchio 模型；调用者显式传入 `q_seed` 或 `current_head_pos` 时
 
 ## 发布边界
 
-发布路径没有统一迁移为 C++。RGB-D 图像和定位结果属于高带宽数值链，已经由 rclcpp 发布；
-Action、感知状态、Grounding 和音频焦点是事件驱动业务，继续由 Python 管理。机械臂和夹爪
-50 Hz 连续命令流是唯一明确适合下一阶段整体迁入 rclcpp 的路径，因为其关注点是节拍、
-watchdog、停止策略和控制器契约，而不是单次 `publish()` 的计算耗时。
+RGB-D 图像和定位结果继续由 rclcpp 发布；Action、感知状态、Grounding 和音频焦点属于事件
+驱动业务，继续由 Python 管理。机械臂和夹爪 50 Hz 连续命令流已经整体迁入独立的
+`x2_command_publisher` rclcpp 节点。
 
-当前 Python 发布器适用于 Demo 和 50 Hz 验证，但不是实时控制器。生产迁移必须包含调度、
-消息构造、限位后的轨迹消费、取消后的 hold/stop、看门狗和 QoS，不能只包装一个 C++ publish
-函数。详细决策和前置条件见 [发布管理](PUBLISHING.md)。
+Python 通过内部 `ExecuteCommand` Action 一次提交整段限位后轨迹或夹爪目标。C++ 节点负责
+平滑插值、AimDK 消息构造、sequence/stamp、绝对 deadline、容量为 1 的执行边界、取消后的
+最后位置 hold、watchdog 和时序指标。目标系统缺少 `aimdk_msgs` 时不构建该节点，`auto`
+回退原 Python 适配层；`native` 用作真机部署门禁。详细契约见 [发布管理](PUBLISHING.md)。
 
 ## 内置运动学模型
 

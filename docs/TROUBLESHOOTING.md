@@ -129,11 +129,13 @@ ros2 run tf2_ros tf2_echo base_link <camera_optical_frame>
 - 是否设置了 `skip_mode_switch`
 - 是否有取消请求或上一 goal 尚未结束
 
-当前机械臂命令由 Python 适配层按 50 Hz 发布。若出现周期抖动或控制器 watchdog 超时，先检查
-系统负载、控制器期望频率、Topic QoS 和 AimDK 日志；不要通过缩短 `duration` 掩盖发布问题。
-生产级 rclcpp 发布器的建议边界见 [发布管理](PUBLISHING.md)。
+真机应能看到 `/x2_command_publisher` 节点和 `/x2_grasp/execute_command` Action。若
+`command_backend:=native` 报节点未构建，先确认构建前已经 source AimDK，且
+`ros2 pkg prefix aimdk_msgs` 成功。若出现 deadline miss 或 watchdog，检查 C++ 节点日志、系统
+负载、Topic QoS 和 AimDK 控制器日志；不要通过缩短 `duration` 掩盖发布问题。指标和阈值见
+[发布管理](PUBLISHING.md)。
 
 ## 取消后机器人仍有短暂动作
 
-取消是 ROS Action 的协作式取消。已经发送的轨迹点不会撤回，同步服务调用也不能立刻中断。
-紧急情况必须使用硬件急停，而不是 Action cancel。
+取消是 ROS Action 的协作式取消。C++ 发布节点会停止后续帧并按配置重发最后位置 hold，但已
+发送的轨迹点不会撤回，同步服务调用也不能立刻中断。紧急情况必须使用硬件急停。

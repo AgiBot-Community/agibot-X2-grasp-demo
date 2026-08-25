@@ -35,6 +35,7 @@ ROS 2 Action 对外提供可反馈、可取消的抓取接口。
 - RGB-D 时间戳关联、深度帧保留、TF 转换和异常重试
 - Pinocchio 多初值 IK、分段笛卡尔路径与真机执行保护
 - C++17 Pinocchio/pybind11 原生 IK 后端，保留可对比的 Python 后端和自动回退
+- 独立 rclcpp 机械臂/夹爪发布节点，使用绝对 deadline 管理 50 Hz 命令流
 - 内置面向 Demo IK 的简化 X2 URDF，无需额外 description 包即可试运行
 - 同一时间只执行一个抓取 goal，并在各执行阶段检查取消请求
 - dry-run 与真机执行使用相同规划链路
@@ -171,7 +172,7 @@ dry-run result or AimDK arm/hand execution
 | [配置参考](docs/CONFIGURATION.md) | 视觉、IK、轨迹和音频参数 |
 | [架构说明](docs/ARCHITECTURE.md) | 模块职责、线程模型和数据流 |
 | [性能与 C++ 迁移](docs/PERFORMANCE.md) | 原生 IK 边界、左右臂逐项性能和测试条件 |
-| [发布管理](docs/PUBLISHING.md) | 发布路径分类、机械臂 C++ 发布器建议和迁移门槛 |
+| [发布管理](docs/PUBLISHING.md) | C++ 发布节点、取消/watchdog、指标和真机验收 |
 | [远端 API 与内置 URDF](docs/REMOTE_API_AND_URDF.md) | 数据外发边界和简化模型适用范围 |
 | [故障排查](docs/TROUBLESHOOTING.md) | 安装、TF、视觉、IK 和执行问题 |
 | [包内说明](src/x2_grasp/README.md) | 功能包级详细说明 |
@@ -191,7 +192,7 @@ dry-run result or AimDK arm/hand execution
     |-- x2_grasp/              # 感知和抓取编排
     |-- x2_arm/                # IK 后端选择、轨迹和硬件控制
     |-- x2_common/             # 公共 Python 工具
-    `-- src/                   # C++ RGB-D 定位和 Pinocchio IK
+    `-- src/                   # C++ RGB-D、Pinocchio IK 和命令发布节点
 ```
 
 ## 测试

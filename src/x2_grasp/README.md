@@ -190,6 +190,7 @@ ros2 interface show x2_grasp/msg/PerceptionStatus
 | --- | --- | --- |
 | `gripper_reach` | 末端 frame 到夹爪抓取中心 | `0.11 m` |
 | `ik_backend` | `auto` 优先 C++，`native` 禁止回退，`python` 用于对照 | `auto` |
+| `command_backend` | `auto` 优先完整 C++ 发布节点，`native` 禁止回退 | `auto` |
 | `tag_depth` | AprilTag 平面到物体中心的 +X 偏移 | `0.03 m` |
 | `standoff` | 预抓取水平后退距离 | `0.12 m` |
 | `backward` | 起始让位姿态相对当前末端的后撤距离 | `0.03 m` |
@@ -241,7 +242,8 @@ AprilTag 尺寸 `tag_size_m` 和以上几何参数必须按实物标定。真机
 
 ```bash
 export ARK_API_KEY='your-api-key'
-ros2 launch x2_grasp unified_grasp.launch.py mode:=grounding execute:=true
+ros2 launch x2_grasp unified_grasp.launch.py \
+  mode:=grounding command_backend:=native execute:=true
 ```
 
 另一个终端：

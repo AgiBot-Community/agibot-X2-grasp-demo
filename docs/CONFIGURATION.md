@@ -104,6 +104,7 @@ python3 scripts/generate_completion_tone.py
 | --- | --- | --- |
 | `arm_side` | `auto` | `auto` 分别验证左右臂规划并选择关节运动量较小的一侧；也可固定为 `left` 或 `right` |
 | `ik_backend` | `auto` | `auto` 优先原生 C++ 并在扩展缺失时回退；`native` 禁止回退；`python` 用于对照和排查 |
+| `command_backend` | `auto` | `auto` 在真机构建存在时使用 C++ 发布节点；`native` 禁止回退；`python` 保留兼容路径 |
 | `gripper_reach` | `0.11` | 末端 frame 到抓取中心距离 |
 | `tag_depth` | `0.03` | 标签平面到物体中心的 X 偏移 |
 | `standoff` | `0.12` | 预抓取水平距离 |
@@ -134,9 +135,10 @@ ros2 launch x2_grasp unified_grasp.launch.py \
 `*_grip_close_position` 参数范围为 `0.0` 到 `1.0`，其中 `0.0` 表示完全闭合，`1.0` 表示完全
 张开。应根据物体硬度和尺寸逐个标定。
 
-机械臂轨迹和夹爪命令当前按 50 Hz 发布。这个频率由硬件适配层固定，不是抓取 YAML 参数；
-修改前必须核对 AimDK 控制器期望频率、QoS 和超时策略。发布架构取舍见
-[发布管理](PUBLISHING.md)。
+机械臂轨迹和夹爪命令由 `x2_command_publisher` 按 50 Hz 发布。节点参数
+`publish_rate_hz`、`max_delta_per_step`、`deadline_tolerance_ms`、`watchdog_ms` 和
+`hold_on_stop` 位于 YAML 的 `x2_command_publisher` 段。修改前必须核对 AimDK 控制器期望
+频率、QoS、watchdog 和取消后的 hold 契约。详细说明见 [发布管理](PUBLISHING.md)。
 
 ## Action 和执行
 

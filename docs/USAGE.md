@@ -7,7 +7,8 @@
 ```bash
 ros2 launch x2_grasp unified_grasp.launch.py \
   mode:=<apriltag|grounding|auto> \
-  ik_backend:=<auto|native|python> execute:=<false|true>
+  ik_backend:=<auto|native|python> \
+  command_backend:=<auto|native|python> execute:=<false|true>
 ```
 
 `execute:=false` 会完成感知、目标校验和 IK 规划，但不切换机器人模式，也不发送运动轨迹。
@@ -21,6 +22,10 @@ ros2 launch x2_grasp unified_grasp.launch.py \
 /usr/bin/python3 -c \
   'from x2_arm import native_backend_available; print(native_backend_available())'
 ```
+
+`command_backend:=auto` 在安装目录存在真机构建的 `x2_command_publisher` 时启动并使用完整
+C++ 发布节点，否则回退 Python。真机验收使用 `command_backend:=native`，节点缺失或内部
+Action 不可用时会拒绝执行，不会静默回退。
 
 ## AprilTag 模式
 
@@ -101,22 +106,23 @@ ros2 run x2_grasp grasp_action_client bread
 
 ## 取消语义
 
-客户端通过 `cancel_goal_async()` 请求取消。服务端会在等待感知、重试、IK、模式切换和轨迹点
-之间检查请求。取消不会撤销已经发送的硬件命令，也不能强制中断正在执行的同步服务调用。
+客户端通过 `cancel_goal_async()` 请求取消。服务端会在等待感知、重试、IK 和模式切换阶段
+检查请求；执行阶段会取消内部 `ExecuteCommand` Action。C++ 发布节点停止后续帧，并在
+`hold_on_stop=true` 时重发最后位置作为 hold。取消不能撤销此前的命令，也不等同硬件急停。
 
 ## 真机执行清单
 
 1. 在目标机器人上完成依赖安装、构建和完整测试。
-2. 确认 `native_backend_available()` 输出 `True`，并用 `ik_backend:=native` 完成一次 dry-run。
+2. 确认 `native_backend_available()` 输出 `True`，并检查 `x2_command_publisher` 已安装。
 3. 用 `execute:=false` 分别验证所有需要使用的目标和感知模式。
 4. 检查目标 frame 为 `base_link`、单位为米、坐标在所选机械臂可达域内；默认 `arm_side:=auto`。
 5. 检查 AprilTag 尺寸、相机内参、深度尺度和 TF。
 6. 清空机械臂工作空间，确认急停、夹爪和 AimDK 控制模式正常。
-7. 使用 `execute:=true` 启动，先执行单个低风险目标。
+7. 使用 `ik_backend:=native command_backend:=native execute:=true` 启动，先执行单个低风险目标。
 
 ```bash
 ros2 launch x2_grasp unified_grasp.launch.py \
-  mode:=apriltag execute:=true
+  mode:=apriltag ik_backend:=native command_backend:=native execute:=true
 ```
 
 默认 `arm_side:=auto`。标定或排查单侧机械臂时，可在启动命令中临时指定
@@ -127,6 +133,7 @@ ros2 launch x2_grasp unified_grasp.launch.py \
 ```bash
 ros2 action info /x2_grasp/grasp
 ros2 node list
+ros2 action info /x2_grasp/execute_command
 ros2 topic hz /x2_apriltag/status
 ros2 topic echo /x2_rgbd_localizer/status x2_grasp/msg/PerceptionStatus
 ```
