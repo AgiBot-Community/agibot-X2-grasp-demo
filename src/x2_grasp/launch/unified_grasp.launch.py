@@ -24,6 +24,7 @@ def generate_launch_description() -> LaunchDescription:
     )
     mode = LaunchConfiguration("mode")
     arm_side = LaunchConfiguration("arm_side")
+    ik_backend = LaunchConfiguration("ik_backend")
     execute = ParameterValue(LaunchConfiguration("execute"), value_type=bool)
 
     return LaunchDescription(
@@ -44,6 +45,12 @@ def generate_launch_description() -> LaunchDescription:
                 default_value="auto",
                 description="automatically select an arm or force left/right",
                 choices=["auto", "left", "right"],
+            ),
+            DeclareLaunchArgument(
+                "ik_backend",
+                default_value="auto",
+                description="prefer native IK, require native, or force Python",
+                choices=["auto", "native", "python"],
             ),
             Node(
                 package="x2_grasp",
@@ -76,7 +83,12 @@ def generate_launch_description() -> LaunchDescription:
                 output="screen",
                 parameters=[
                     config,
-                    {"source": mode, "arm_side": arm_side, "execute": execute},
+                    {
+                        "source": mode,
+                        "arm_side": arm_side,
+                        "ik_backend": ik_backend,
+                        "execute": execute,
+                    },
                 ],
             ),
         ]
