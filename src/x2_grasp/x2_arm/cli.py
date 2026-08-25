@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 
 from .config import ArmSide, X2IKConfig
-from .solver import X2ArmIKSolver
+from .native_solver import create_ik_solver
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -34,6 +34,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.02,
         help="Keep arm joints this far (rad) inside URDF mechanical limits",
     )
+    parser.add_argument(
+        "--ik-backend",
+        choices=("auto", "native", "python"),
+        default="auto",
+    )
     parser.add_argument("--arm-pos", nargs=14, type=float, help="Seed arm_pos[14]. Default is ready pose.")
     parser.add_argument("--print-json", action="store_true")
     parser.add_argument("--limits", action="store_true", help="Print arm joint limits and exit")
@@ -48,7 +53,7 @@ def main() -> None:
         joint_margin=args.joint_margin,
     )
 
-    solver = X2ArmIKSolver(cfg)
+    solver = create_ik_solver(cfg, args.ik_backend)
     if args.limits:
         for name, lower, upper in solver.effective_joint_limits_for_arm_pos():
             print(f"{name:35s} {lower: .6f} {upper: .6f}")

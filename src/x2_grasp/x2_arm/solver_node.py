@@ -4,7 +4,8 @@ import math
 from typing import Iterable
 
 from .config import ARM_POS_ORDER, ArmSide, X2IKConfig, default_urdf_path
-from .solver import IKResult, X2ArmIKSolver
+from .native_solver import create_ik_solver
+from .solver import IKResult
 
 
 DEFAULT_TOPICS = {
@@ -96,6 +97,7 @@ def create_node():
             self.declare_parameter("orientation_weight", 1.0)
             self.declare_parameter("orientation_eps", 1e-3)
             self.declare_parameter("joint_margin", 0.02)
+            self.declare_parameter("ik_backend", "auto")
             self.declare_parameter("joint_states_topic", DEFAULT_JOINT_STATES_TOPIC)
             self.declare_parameter("status_topic", DEFAULT_STATUS_TOPIC)
             for side in ArmSide:
@@ -109,11 +111,12 @@ def create_node():
                     f"{side.value}_solution_topic", DEFAULT_TOPICS[side]["solution"]
                 )
 
-            self.solver = X2ArmIKSolver(
+            self.solver = create_ik_solver(
                 X2IKConfig(
                     urdf_path=default_urdf_path(),
                     joint_margin=float(self._parameter("joint_margin")),
-                )
+                ),
+                str(self._parameter("ik_backend")),
             )
             self.current_arm_pos: list[float] | None = None
             self.status_publisher = self.create_publisher(

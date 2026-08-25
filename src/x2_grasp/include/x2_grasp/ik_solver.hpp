@@ -4,12 +4,14 @@
 #include <pinocchio/multibody/model.hpp>
 
 #include <array>
+#include <mutex>
 #include <string>
+#include <tuple>
 #include <vector>
 
 namespace x2_grasp {
 
-struct AxisIKResult {
+struct NativeIKResult {
   bool success{false};
   std::vector<double> arm_pos;
   std::array<double, 3> final_xyz{};
@@ -31,15 +33,32 @@ class NativeIKSolver {
   std::vector<double> clip_arm_pos(const std::vector<double> &arm_pos) const;
   std::array<double, 3> fk_xyz(const std::string &side,
                               const std::vector<double> &arm_pos);
+  std::array<double, 3> fk_rpy(const std::string &side,
+                              const std::vector<double> &arm_pos);
   std::array<double, 3> fk_axis(const std::string &side,
                                const std::vector<double> &arm_pos,
                                const std::array<double, 3> &local_axis);
-  AxisIKResult solve_axis(const std::string &side,
-                         const std::array<double, 3> &target_xyz,
-                         const std::array<double, 3> &target_axis,
-                         const std::vector<double> &arm_pos,
-                         const std::array<double, 3> &local_axis,
-                         double orientation_weight, double orientation_eps);
+  NativeIKResult solve_position(const std::string &side,
+                                const std::array<double, 3> &target_xyz,
+                                const std::vector<double> &arm_pos);
+  NativeIKResult solve_pose(const std::string &side,
+                            const std::array<double, 3> &target_xyz,
+                            const std::array<double, 3> &target_rpy,
+                            const std::vector<double> &arm_pos,
+                            double orientation_weight,
+                            double orientation_eps);
+  NativeIKResult solve_axis(const std::string &side,
+                            const std::array<double, 3> &target_xyz,
+                            const std::array<double, 3> &target_axis,
+                            const std::vector<double> &arm_pos,
+                            const std::array<double, 3> &local_axis,
+                            double orientation_weight,
+                            double orientation_eps);
+  std::vector<double> configuration_from_arm_pos(
+      const std::vector<double> &arm_pos) const;
+  std::vector<Eigen::Index> arm_q_indices() const;
+  std::vector<std::tuple<std::string, double, double>> joint_limits() const;
+  std::vector<std::tuple<std::string, double, double>> effective_joint_limits() const;
 
  private:
   struct SideMetadata {
@@ -52,6 +71,10 @@ class NativeIKSolver {
   Eigen::VectorXd q_from_arm_pos(const std::vector<double> &arm_pos) const;
   std::vector<double> arm_pos_from_q(const Eigen::VectorXd &q) const;
   void clip_q(Eigen::VectorXd &q) const;
+  NativeIKResult finish_result(const SideMetadata &meta,
+                               const Eigen::VectorXd &q,
+                               NativeIKResult result,
+                               const Eigen::Vector3d *tool_axis = nullptr);
 
   pinocchio::Model model_;
   pinocchio::Data data_;
@@ -65,6 +88,7 @@ class NativeIKSolver {
   double dt_;
   double damping_;
   double max_step_norm_;
+  std::mutex data_mutex_;
 };
 
 }  // namespace x2_grasp

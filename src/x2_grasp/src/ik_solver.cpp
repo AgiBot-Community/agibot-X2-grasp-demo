@@ -6,6 +6,7 @@
 #include <pinocchio/algorithm/kinematics.hpp>
 #include <pinocchio/parsers/urdf.hpp>
 #include <pinocchio/math/rpy.hpp>
+#include <pinocchio/spatial/explog.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -148,6 +149,7 @@ std::vector<double> NativeIKSolver::clip_arm_pos(
 
 std::array<double, 3> NativeIKSolver::fk_xyz(
     const std::string &side, const std::vector<double> &arm_pos) {
+  const std::lock_guard<std::mutex> lock(data_mutex_);
   const auto &meta = metadata(side);
   const Eigen::VectorXd q = q_from_arm_pos(arm_pos);
   pinocchio::forwardKinematics(model_, data_, q);
@@ -155,9 +157,21 @@ std::array<double, 3> NativeIKSolver::fk_xyz(
   return array3(data_.oMf[meta.frame_id].translation());
 }
 
+std::array<double, 3> NativeIKSolver::fk_rpy(
+    const std::string &side, const std::vector<double> &arm_pos) {
+  const std::lock_guard<std::mutex> lock(data_mutex_);
+  const auto &meta = metadata(side);
+  const Eigen::VectorXd q = q_from_arm_pos(arm_pos);
+  pinocchio::forwardKinematics(model_, data_, q);
+  pinocchio::updateFramePlacements(model_, data_);
+  return array3(pinocchio::rpy::matrixToRpy(
+      data_.oMf[meta.frame_id].rotation()));
+}
+
 std::array<double, 3> NativeIKSolver::fk_axis(
     const std::string &side, const std::vector<double> &arm_pos,
     const std::array<double, 3> &local_axis) {
+  const std::lock_guard<std::mutex> lock(data_mutex_);
   Eigen::Vector3d axis = vector3(local_axis);
   validate_vector3(axis, "local_axis", true);
   axis.normalize();
@@ -168,12 +182,139 @@ std::array<double, 3> NativeIKSolver::fk_axis(
   return array3((data_.oMf[meta.frame_id].rotation() * axis).normalized());
 }
 
-AxisIKResult NativeIKSolver::solve_axis(
+NativeIKResult NativeIKSolver::solve_position(
+    const std::string &side, const std::array<double, 3> &target_xyz,
+    const std::vector<double> &arm_pos) {
+  const std::lock_guard<std::mutex> lock(data_mutex_);
+  const auto &meta = metadata(side);
+  const Eigen::Vector3d target = vector3(target_xyz);
+  validate_vector3(target, "target_xyz");
+  Eigen::VectorXd q = q_from_arm_pos(arm_pos);
+  NativeIKResult result;
+  result.error_norm = std::numeric_limits<double>::infinity();
+
+  for (int iteration = 1; iteration <= max_iters_; ++iteration) {
+    result.iterations = iteration;
+    pinocchio::forwardKinematics(model_, data_, q);
+    pinocchio::updateFramePlacements(model_, data_);
+    const Eigen::Vector3d error =
+        target - data_.oMf[meta.frame_id].translation();
+    result.error_norm = error.norm();
+    if (result.error_norm < eps_) {
+      result.success = true;
+      break;
+    }
+
+    Eigen::Matrix<double, 6, Eigen::Dynamic> jacobian(6, model_.nv);
+    jacobian.setZero();
+    pinocchio::computeFrameJacobian(
+        model_, data_, q, meta.frame_id,
+        pinocchio::ReferenceFrame::LOCAL_WORLD_ALIGNED, jacobian);
+    Eigen::Matrix<double, 3, 7> active_jacobian;
+    for (std::size_t column = 0; column < meta.velocity_indices.size(); ++column) {
+      active_jacobian.col(column) =
+          jacobian.block<3, 1>(0, meta.velocity_indices[column]);
+    }
+    const Eigen::Matrix3d normal =
+        active_jacobian * active_jacobian.transpose() +
+        damping_ * Eigen::Matrix3d::Identity();
+    const Eigen::Matrix<double, 7, 1> active_velocity =
+        active_jacobian.transpose() * normal.ldlt().solve(error);
+    Eigen::VectorXd velocity = Eigen::VectorXd::Zero(model_.nv);
+    for (std::size_t i = 0; i < meta.velocity_indices.size(); ++i) {
+      velocity[meta.velocity_indices[i]] = active_velocity[i];
+    }
+    Eigen::VectorXd step = velocity * dt_;
+    if (step.norm() > max_step_norm_) {
+      step *= max_step_norm_ / step.norm();
+    }
+    q = pinocchio::integrate(model_, q, step);
+    clip_q(q);
+  }
+  return finish_result(meta, q, std::move(result));
+}
+
+NativeIKResult NativeIKSolver::solve_pose(
+    const std::string &side, const std::array<double, 3> &target_xyz,
+    const std::array<double, 3> &target_rpy,
+    const std::vector<double> &arm_pos, double orientation_weight,
+    double orientation_eps) {
+  const std::lock_guard<std::mutex> lock(data_mutex_);
+  const auto &meta = metadata(side);
+  const Eigen::Vector3d target = vector3(target_xyz);
+  const Eigen::Vector3d rpy = vector3(target_rpy);
+  validate_vector3(target, "target_xyz");
+  validate_vector3(rpy, "target_rpy");
+  if (!std::isfinite(orientation_weight) || orientation_weight <= 0.0 ||
+      !std::isfinite(orientation_eps) || orientation_eps <= 0.0) {
+    throw std::invalid_argument(
+        "orientation_weight and orientation_eps must be positive finite values");
+  }
+  const Eigen::Matrix3d target_rotation =
+      pinocchio::rpy::rpyToMatrix(rpy.x(), rpy.y(), rpy.z());
+  Eigen::VectorXd q = q_from_arm_pos(arm_pos);
+  NativeIKResult result;
+  result.error_norm = std::numeric_limits<double>::infinity();
+  result.position_error_norm = std::numeric_limits<double>::infinity();
+  result.orientation_error_norm = std::numeric_limits<double>::infinity();
+
+  for (int iteration = 1; iteration <= max_iters_; ++iteration) {
+    result.iterations = iteration;
+    pinocchio::forwardKinematics(model_, data_, q);
+    pinocchio::updateFramePlacements(model_, data_);
+    const auto &pose = data_.oMf[meta.frame_id];
+    const Eigen::Vector3d position_error = target - pose.translation();
+    const Eigen::Vector3d rotation_error =
+        pinocchio::log3(target_rotation * pose.rotation().transpose());
+    result.position_error_norm = position_error.norm();
+    result.orientation_error_norm = rotation_error.norm();
+    Eigen::Matrix<double, 6, 1> error;
+    error << position_error, orientation_weight * rotation_error;
+    result.error_norm = error.norm();
+    if (result.position_error_norm < eps_ &&
+        result.orientation_error_norm < orientation_eps) {
+      result.success = true;
+      break;
+    }
+
+    Eigen::Matrix<double, 6, Eigen::Dynamic> jacobian(6, model_.nv);
+    jacobian.setZero();
+    pinocchio::computeFrameJacobian(
+        model_, data_, q, meta.frame_id,
+        pinocchio::ReferenceFrame::LOCAL_WORLD_ALIGNED, jacobian);
+    Eigen::Matrix<double, 6, 7> active_jacobian;
+    for (std::size_t column = 0; column < meta.velocity_indices.size(); ++column) {
+      const auto source = meta.velocity_indices[column];
+      active_jacobian.block<3, 1>(0, column) = jacobian.block<3, 1>(0, source);
+      active_jacobian.block<3, 1>(3, column) =
+          orientation_weight * jacobian.block<3, 1>(3, source);
+    }
+    const Eigen::Matrix<double, 6, 6> normal =
+        active_jacobian * active_jacobian.transpose() +
+        damping_ * Eigen::Matrix<double, 6, 6>::Identity();
+    const Eigen::Matrix<double, 7, 1> active_velocity =
+        active_jacobian.transpose() * normal.ldlt().solve(error);
+    Eigen::VectorXd velocity = Eigen::VectorXd::Zero(model_.nv);
+    for (std::size_t i = 0; i < meta.velocity_indices.size(); ++i) {
+      velocity[meta.velocity_indices[i]] = active_velocity[i];
+    }
+    Eigen::VectorXd step = velocity * dt_;
+    if (step.norm() > max_step_norm_) {
+      step *= max_step_norm_ / step.norm();
+    }
+    q = pinocchio::integrate(model_, q, step);
+    clip_q(q);
+  }
+  return finish_result(meta, q, std::move(result));
+}
+
+NativeIKResult NativeIKSolver::solve_axis(
     const std::string &side, const std::array<double, 3> &target_xyz,
     const std::array<double, 3> &target_axis,
     const std::vector<double> &arm_pos,
     const std::array<double, 3> &local_axis, double orientation_weight,
     double orientation_eps) {
+  const std::lock_guard<std::mutex> lock(data_mutex_);
   const auto &meta = metadata(side);
   const Eigen::Vector3d target = vector3(target_xyz);
   Eigen::Vector3d axis = vector3(target_axis);
@@ -189,7 +330,7 @@ AxisIKResult NativeIKSolver::solve_axis(
   axis.normalize();
   tool_axis.normalize();
   Eigen::VectorXd q = q_from_arm_pos(arm_pos);
-  AxisIKResult result;
+  NativeIKResult result;
   result.error_norm = std::numeric_limits<double>::infinity();
   result.position_error_norm = std::numeric_limits<double>::infinity();
   result.orientation_error_norm = std::numeric_limits<double>::infinity();
@@ -245,15 +386,59 @@ AxisIKResult NativeIKSolver::solve_axis(
     clip_q(q);
   }
 
+  return finish_result(meta, q, std::move(result), &tool_axis);
+}
+
+NativeIKResult NativeIKSolver::finish_result(
+    const SideMetadata &meta, const Eigen::VectorXd &q, NativeIKResult result,
+    const Eigen::Vector3d *tool_axis) {
   pinocchio::forwardKinematics(model_, data_, q);
   pinocchio::updateFramePlacements(model_, data_);
   const auto &final_pose = data_.oMf[meta.frame_id];
   result.arm_pos = arm_pos_from_q(q);
   result.final_xyz = array3(final_pose.translation());
-  result.final_axis = array3((final_pose.rotation() * tool_axis).normalized());
-  const Eigen::Vector3d rpy = pinocchio::rpy::matrixToRpy(final_pose.rotation());
-  result.final_rpy = array3(rpy);
+  result.final_rpy =
+      array3(pinocchio::rpy::matrixToRpy(final_pose.rotation()));
+  if (tool_axis != nullptr) {
+    result.final_axis =
+        array3((final_pose.rotation() * *tool_axis).normalized());
+  }
   return result;
+}
+
+std::vector<double> NativeIKSolver::configuration_from_arm_pos(
+    const std::vector<double> &arm_pos) const {
+  const Eigen::VectorXd q = q_from_arm_pos(arm_pos);
+  return std::vector<double>(q.data(), q.data() + q.size());
+}
+
+std::vector<Eigen::Index> NativeIKSolver::arm_q_indices() const {
+  return {arm_q_indices_.begin(), arm_q_indices_.end()};
+}
+
+std::vector<std::tuple<std::string, double, double>>
+NativeIKSolver::joint_limits() const {
+  std::vector<std::tuple<std::string, double, double>> limits;
+  limits.reserve(14);
+  for (std::size_t i = 0; i < arm_q_indices_.size(); ++i) {
+    const std::string &name = i < 7 ? kLeftJoints[i] : kRightJoints[i - 7];
+    const auto q_index = arm_q_indices_[i];
+    limits.emplace_back(name, model_.lowerPositionLimit[q_index],
+                        model_.upperPositionLimit[q_index]);
+  }
+  return limits;
+}
+
+std::vector<std::tuple<std::string, double, double>>
+NativeIKSolver::effective_joint_limits() const {
+  std::vector<std::tuple<std::string, double, double>> limits;
+  limits.reserve(14);
+  for (std::size_t i = 0; i < arm_q_indices_.size(); ++i) {
+    const std::string &name = i < 7 ? kLeftJoints[i] : kRightJoints[i - 7];
+    const auto q_index = arm_q_indices_[i];
+    limits.emplace_back(name, clip_lower_[q_index], clip_upper_[q_index]);
+  }
+  return limits;
 }
 
 }  // namespace x2_grasp
