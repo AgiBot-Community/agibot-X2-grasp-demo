@@ -247,6 +247,7 @@ def test_ik_command_entrypoints_default_to_auto_backend():
 
     assert build_cli_parser().parse_args([]).ik_backend == "auto"
     assert build_hardware_parser().parse_args([]).ik_backend == "auto"
+    assert build_hardware_parser().parse_args([]).command_backend == "auto"
 
 
 def test_auto_backend_falls_back_when_extension_is_unavailable(monkeypatch):

@@ -379,13 +379,13 @@ class _Node:
         self.calls = []
         self.node = SimpleNamespace(get_logger=lambda: _Logger())
 
-    def close_gripper(self, hand, seconds):
+    def close_gripper(self, hand, seconds, **_kwargs):
         self.calls.append(("close", hand, seconds))
 
-    def open_gripper(self, hand, seconds):
+    def open_gripper(self, hand, seconds, **_kwargs):
         self.calls.append(("open", hand, seconds))
 
-    def set_gripper_position(self, hand, position, seconds):
+    def set_gripper_position(self, hand, position, seconds, **_kwargs):
         self.calls.append(("grip", hand, position, seconds))
 
     def publish_trajectory(

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Iterable
 
 from .config import ArmSide, X2IKConfig
+from .command_client import CppCommandClient, native_command_publisher_installed
 from .standalone_hand_api import StandaloneHandAPI
 from .native_solver import create_ik_solver
 from .trajectory import interpolate_arm_pos
@@ -63,7 +64,32 @@ class X2HardwareNode:
             joint_margin=getattr(args, "joint_margin", default_cfg.joint_margin),
         )
         self.solver = create_ik_solver(cfg, getattr(args, "ik_backend", "auto"))
-        self.publisher = self.node.create_publisher(UpperBodyCommandArray, args.command_topic, 10)
+        self.command_backend = getattr(args, "command_backend", "auto")
+        self.command_client: CppCommandClient | None = None
+        native_installed = native_command_publisher_installed()
+        if self.command_backend == "native" and not native_installed:
+            raise RuntimeError(
+                "native command backend requested, but x2_command_publisher was not built"
+            )
+        if self.command_backend != "python" and native_installed:
+            candidate = CppCommandClient(self.node)
+            if candidate.wait_for_server(timeout_sec=5.0):
+                self.command_client = candidate
+                self.command_backend = "native"
+            else:
+                candidate.shutdown()
+                if self.command_backend == "native":
+                    raise RuntimeError("C++ command publisher Action is not available")
+        if self.command_client is None:
+            self.command_backend = "python"
+        self.node.get_logger().info(
+            f"50 Hz command backend: {self.command_backend}"
+        )
+        self.publisher = (
+            None
+            if self.command_client is not None
+            else self.node.create_publisher(UpperBodyCommandArray, args.command_topic, 10)
+        )
         self.joint_client = self.node.create_client(GetAllJointState, args.joint_state_service)
         self.action_client = self.node.create_client(SetMcAction, args.action_service)
         self.source = args.source
@@ -82,23 +108,44 @@ class X2HardwareNode:
         return self.hand_api
 
     def set_gripper_position(
-        self, hand: str, position: float, seconds: float = 2.0
+        self,
+        hand: str,
+        position: float,
+        seconds: float = 2.0,
+        *,
+        cancel_requested=lambda: False,
     ) -> dict:
         """Set a left, right, or both grippers to a 0.0-1.0 position."""
 
+        if self.command_client is not None:
+            return self.command_client.execute_hand(
+                hand,
+                position if hand in {"left", "both"} else None,
+                position if hand in {"right", "both"} else None,
+                seconds,
+                cancel_requested,
+            )
         return self._ensure_hand_api().set_position(
-            hand, position, seconds=seconds
+            hand, position, seconds=seconds, cancel_requested=cancel_requested
         )
 
-    def open_gripper(self, hand: str = "both", seconds: float = 2.0) -> dict:
+    def open_gripper(
+        self, hand: str = "both", seconds: float = 2.0, *, cancel_requested=lambda: False
+    ) -> dict:
         """Open one gripper or both grippers."""
 
-        return self._ensure_hand_api().open(hand, seconds=seconds)
+        return self.set_gripper_position(
+            hand, 1.0, seconds=seconds, cancel_requested=cancel_requested
+        )
 
-    def close_gripper(self, hand: str = "both", seconds: float = 2.0) -> dict:
+    def close_gripper(
+        self, hand: str = "both", seconds: float = 2.0, *, cancel_requested=lambda: False
+    ) -> dict:
         """Close one gripper or both grippers."""
 
-        return self._ensure_hand_api().close_grippers(hand, seconds=seconds)
+        return self.set_gripper_position(
+            hand, 0.0, seconds=seconds, cancel_requested=cancel_requested
+        )
 
     def switch_action(self, action_desc: str) -> None:
         if not self.action_client.wait_for_service(timeout_sec=2.0):
@@ -156,6 +203,17 @@ class X2HardwareNode:
                 "IK goal was outside the operational IK limits; "
                 "trajectory goal was clamped before publishing"
             )
+        if self.command_client is not None:
+            metrics = self.command_client.execute_arm(
+                safe_start, safe_goal, duration, cancel_requested
+            )
+            self.node.get_logger().info(
+                "C++ command stream: "
+                f"frames={metrics['frames_published']}/{metrics['frames_requested']} "
+                f"misses={metrics['deadline_misses']} "
+                f"max_lateness_ms={metrics['max_lateness_ms']:.3f}"
+            )
+            return
         waypoints = interpolate_arm_pos(
             safe_start, safe_goal, duration=duration, rate_hz=50.0
         )
@@ -240,6 +298,8 @@ class X2HardwareNode:
         self.publish_trajectory(current, result.arm_pos, duration)
 
     def shutdown(self) -> None:
+        if self.command_client is not None:
+            self.command_client.shutdown()
         if self.hand_api is not None:
             self.hand_api.shutdown()
         self.node.destroy_node()
@@ -272,6 +332,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("auto", "native", "python"),
         default="auto",
         help="IK implementation (auto prefers the native extension)",
+    )
+    parser.add_argument(
+        "--command-backend",
+        choices=("auto", "native", "python"),
+        default="auto",
+        help="50 Hz command publisher (auto prefers the C++ node)",
     )
     parser.add_argument("--dry-run", action="store_true", help="Compute IK but do not publish motion")
     parser.add_argument("--duration", type=float, default=2.0)

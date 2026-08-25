@@ -32,6 +32,7 @@ def make_hardware_args(args):
         hand_command_topic="/aima/hal/joint/hand/command",
         hand_publish_hz=50.0,
         ik_backend=getattr(args, "ik_backend", "auto"),
+        command_backend=getattr(args, "command_backend", "auto"),
     )
 
 
@@ -89,6 +90,14 @@ def _publish_trajectory(node, start, goal, duration, cancel_requested) -> None:
         raise GraspCancelled(str(error)) from error
 
 
+def _command_gripper(command, cancel_requested, *args, **kwargs):
+    _check_canceled(cancel_requested)
+    try:
+        return command(*args, cancel_requested=cancel_requested, **kwargs)
+    except InterruptedError as error:
+        raise GraspCancelled(str(error)) from error
+
+
 def execute_grasp(
     node,
     current_arm_pos,
@@ -102,8 +111,12 @@ def execute_grasp(
     side = plan.side.value
 
     feedback("preparing", "closing gripper and moving to clearance pose")
-    _check_canceled(cancel_requested)
-    node.close_gripper(side, seconds=args.initial_close_seconds)
+    _command_gripper(
+        node.close_gripper,
+        cancel_requested,
+        side,
+        seconds=args.initial_close_seconds,
+    )
     _publish_trajectory(
         node,
         current_arm_pos,
@@ -113,8 +126,12 @@ def execute_grasp(
     )
 
     feedback("approaching", "opening gripper and moving to pre-grasp pose")
-    _check_canceled(cancel_requested)
-    node.open_gripper(side, seconds=args.open_seconds)
+    _command_gripper(
+        node.open_gripper,
+        cancel_requested,
+        side,
+        seconds=args.open_seconds,
+    )
     _publish_trajectory(
         node,
         plan.retract_arm_pos,
@@ -137,9 +154,12 @@ def execute_grasp(
         approach_start = approach_result.arm_pos
 
     feedback("gripping", f"setting {side} gripper to {grip_position:.3f}")
-    _check_canceled(cancel_requested)
-    node.set_gripper_position(
-        side, grip_position, seconds=args.grip_close_seconds
+    _command_gripper(
+        node.set_gripper_position,
+        cancel_requested,
+        side,
+        grip_position,
+        seconds=args.grip_close_seconds,
     )
 
     lift_start = plan.grasp.arm_pos

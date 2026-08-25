@@ -30,6 +30,8 @@ def test_parameter_validation_rejects_unsafe_motion_values() -> None:
         validate_parameters(_args(arm_side="middle"))
     with pytest.raises(ValueError, match="ik_backend"):
         validate_parameters(_args(ik_backend="remote"))
+    with pytest.raises(ValueError, match="command_backend"):
+        validate_parameters(_args(command_backend="remote"))
 
 
 def test_target_catalog_is_built_from_parallel_config_arrays() -> None:

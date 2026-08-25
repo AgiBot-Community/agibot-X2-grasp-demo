@@ -40,6 +40,7 @@ DEFAULTS = {
     "source": "grounding",
     "arm_side": "auto",
     "ik_backend": "auto",
+    "command_backend": "auto",
     "backward": BACKWARD_M,
     "initial_upward": INITIAL_UPWARD_M,
     "grasp_x_offset": GRASP_X_OFFSET_M,
@@ -109,7 +110,7 @@ def build_parser() -> argparse.ArgumentParser:
                 choices=("auto", "left", "right"),
                 default=default,
             )
-        elif name == "ik_backend":
+        elif name in {"ik_backend", "command_backend"}:
             parser.add_argument(
                 option,
                 choices=("auto", "native", "python"),
@@ -150,6 +151,8 @@ def validate_parameters(args) -> None:
         raise ValueError("arm_side must be auto, left, or right")
     if args.ik_backend not in {"auto", "native", "python"}:
         raise ValueError("ik_backend must be auto, native, or python")
+    if args.command_backend not in {"auto", "native", "python"}:
+        raise ValueError("command_backend must be auto, native, or python")
     numeric_names = [
         name for name, default in DEFAULTS.items() if isinstance(default, float)
     ]

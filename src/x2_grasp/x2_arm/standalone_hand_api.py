@@ -173,42 +173,63 @@ class HandTarget:
         self._api = api
         self.target = _target(target)
 
-    def __call__(self, position, seconds=2.0):
+    def __call__(self, position, seconds=2.0, cancel_requested=lambda: False):
         """允许用 ``self.left(0.5)``、``self.right(0.5)`` 或
         ``self.both(0.5)`` 快速控制。
         """
 
-        return self.set_position(position, seconds=seconds)
+        return self.set_position(
+            position, seconds=seconds, cancel_requested=cancel_requested
+        )
 
-    def set_position(self, position, seconds=2.0):
+    def set_position(self, position, seconds=2.0, cancel_requested=lambda: False):
         """设置位置；对 ``both`` 目标会把同一位置发送给左右手。"""
 
         if self.target == "left":
-            return self._api.set_left_position(position, seconds=seconds)
+            return self._api.set_left_position(
+                position, seconds=seconds, cancel_requested=cancel_requested
+            )
         if self.target == "right":
-            return self._api.set_right_position(position, seconds=seconds)
-        return self._api.set_both_position(position, seconds=seconds)
+            return self._api.set_right_position(
+                position, seconds=seconds, cancel_requested=cancel_requested
+            )
+        return self._api.set_both_position(
+            position, seconds=seconds, cancel_requested=cancel_requested
+        )
 
     move = set_position
 
-    def set_positions(self, left_position, right_position, seconds=2.0):
+    def set_positions(
+        self,
+        left_position,
+        right_position,
+        seconds=2.0,
+        cancel_requested=lambda: False,
+    ):
         """分别设置左右位置，仅 ``self.both`` 支持此方法。"""
 
         if self.target != "both":
             raise ValueError("self.left 不支持 set_positions，请分别控制目标")
         return self._api.set_both_positions(
-            left_position, right_position, seconds=seconds
+            left_position,
+            right_position,
+            seconds=seconds,
+            cancel_requested=cancel_requested,
         )
 
-    def open(self, seconds=2.0):
+    def open(self, seconds=2.0, cancel_requested=lambda: False):
         """打开目标夹爪。"""
 
-        return self.set_position(1.0, seconds=seconds)
+        return self.set_position(
+            1.0, seconds=seconds, cancel_requested=cancel_requested
+        )
 
-    def close(self, seconds=2.0):
+    def close(self, seconds=2.0, cancel_requested=lambda: False):
         """闭合目标夹爪。"""
 
-        return self.set_position(0.0, seconds=seconds)
+        return self.set_position(
+            0.0, seconds=seconds, cancel_requested=cancel_requested
+        )
 
 
 class StandaloneHandAPI:
@@ -368,7 +389,14 @@ class StandaloneHandAPI:
 
     build = build_command
 
-    def _publish(self, left_position, right_position, target, seconds):
+    def _publish(
+        self,
+        left_position,
+        right_position,
+        target,
+        seconds,
+        cancel_requested=lambda: False,
+    ):
         self._ensure_open()
         if not self._ros_ok():
             raise HandControlError("ROS2 context 未运行，无法发布夹爪命令")
@@ -385,6 +413,8 @@ class StandaloneHandAPI:
         frames = 0
         while self._ros_ok():
             self._ensure_open()
+            if cancel_requested():
+                raise InterruptedError("gripper command canceled")
             try:
                 self.publisher.publish(message)
             except Exception as exc:
@@ -412,49 +442,86 @@ class StandaloneHandAPI:
         hand = _target(hand)
         return getattr(self, hand)
 
-    def set_position(self, hand, position, seconds=2.0):
+    def set_position(
+        self, hand, position, seconds=2.0, cancel_requested=lambda: False
+    ):
         """统一入口：按 ``left``、``right`` 或 ``both`` 控制。"""
 
-        return self._handle(hand).set_position(position, seconds=seconds)
+        return self._handle(hand).set_position(
+            position, seconds=seconds, cancel_requested=cancel_requested
+        )
 
-    def set_positions(self, left_position, right_position, seconds=2.0):
+    def set_positions(
+        self,
+        left_position,
+        right_position,
+        seconds=2.0,
+        cancel_requested=lambda: False,
+    ):
         """统一双手入口，等同于 ``self.both.set_positions(...)``。"""
 
         return self.both.set_positions(
             left_position,
             right_position,
             seconds=seconds,
+            cancel_requested=cancel_requested,
         )
 
-    def open(self, hand="both", seconds=2.0):
+    def open(
+        self, hand="both", seconds=2.0, cancel_requested=lambda: False
+    ):
         """统一打开入口，按 ``hand`` 选择一侧或双手。"""
 
-        return self._handle(hand).open(seconds=seconds)
+        return self._handle(hand).open(
+            seconds=seconds, cancel_requested=cancel_requested
+        )
 
-    def close_grippers(self, hand="both", seconds=2.0):
+    def close_grippers(
+        self, hand="both", seconds=2.0, cancel_requested=lambda: False
+    ):
         """统一闭合入口；资源生命周期请使用 ``shutdown()``。"""
 
-        return self._handle(hand).close(seconds=seconds)
+        return self._handle(hand).close(
+            seconds=seconds, cancel_requested=cancel_requested
+        )
 
-    def set_left_position(self, position, seconds=2.0):
+    def set_left_position(
+        self, position, seconds=2.0, cancel_requested=lambda: False
+    ):
         """发布左手位置。业务代码通常直接使用 ``self.left``。"""
 
         position = _position(position, "position")
-        return self._publish(position, None, "left", seconds)
+        return self._publish(
+            position, None, "left", seconds, cancel_requested
+        )
 
-    def set_right_position(self, position, seconds=2.0):
+    def set_right_position(
+        self, position, seconds=2.0, cancel_requested=lambda: False
+    ):
         """发布右手位置。业务代码通常直接使用 ``self.right``。"""
 
         position = _position(position, "position")
-        return self._publish(None, position, "right", seconds)
+        return self._publish(
+            None, position, "right", seconds, cancel_requested
+        )
 
-    def set_both_position(self, position, seconds=2.0):
+    def set_both_position(
+        self, position, seconds=2.0, cancel_requested=lambda: False
+    ):
         """让左右手移动到同一个位置。"""
 
         position = _position(position, "position")
-        return self._publish(position, position, "both", seconds)
+        return self._publish(
+            position, position, "both", seconds, cancel_requested
+        )
 
-    def set_both_positions(self, left_position, right_position, seconds=2.0):
+    def set_both_positions(
+        self,
+        left_position,
+        right_position,
+        seconds=2.0,
+        cancel_requested=lambda: False,
+    ):
         """分别发布左右手位置。"""
 
         left_position = _position(left_position, "left_position")
@@ -464,6 +531,7 @@ class StandaloneHandAPI:
             right_position,
             "both",
             seconds,
+            cancel_requested,
         )
 
 

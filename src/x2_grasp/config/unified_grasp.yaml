@@ -88,6 +88,8 @@ x2_grasp_node:
     arm_side: auto
     # auto 优先使用已构建的 C++ Pinocchio 后端，扩展不可用时回退 Python。
     ik_backend: auto
+    # auto 在真机构建存在 x2_command_publisher 时使用完整 C++ 50 Hz 发布节点。
+    command_backend: auto
     grounding_command_topic: /x2_grasp/grounding_target
     arbitration_probe_timeout: 0.5
     arbitration_tag_freshness: 1.0
@@ -132,3 +134,17 @@ x2_grasp_node:
     audio_chunk_ms: 50
     # 相对路径从已安装功能包的 share/x2_grasp/audio 目录解析。
     skip_mode_switch: false
+
+x2_command_publisher:
+  ros__parameters:
+    execute_command_action: /x2_grasp/execute_command
+    command_topic: /mc/upper_body_command
+    hand_command_topic: /aima/hal/joint/hand/command
+    source: x2_arm
+    frame_id: mc_upper_body
+    publish_rate_hz: 50.0
+    max_delta_per_step: 0.03
+    max_duration_seconds: 30.0
+    deadline_tolerance_ms: 2.0
+    watchdog_ms: 60.0
+    hold_on_stop: true

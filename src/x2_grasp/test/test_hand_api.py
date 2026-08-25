@@ -90,3 +90,14 @@ def test_hand_api_validates_positions_and_lifecycle():
     api.shutdown()
     with pytest.raises(HandControlError, match="已关闭"):
         api.open()
+
+
+def test_hand_api_checks_cancellation_before_publishing():
+    node = FakeNode()
+    api = StandaloneHandAPI(node, ros=fake_bindings(), command_topic="/test/hand")
+
+    with pytest.raises(InterruptedError, match="canceled"):
+        api.open("right", seconds=0.01, cancel_requested=lambda: True)
+
+    assert node.publisher.messages == []
+    api.shutdown()

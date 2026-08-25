@@ -32,6 +32,9 @@ def test_readme_is_installed_with_package() -> None:
     assert "X2_WORKSPACE_BUNDLE" not in cmake_source
     assert ".python_packages" not in cmake_source
     assert '"action/Grasp.action"' in cmake_source
+    assert '"action/ExecuteCommand.action"' in cmake_source
+    assert "add_executable(x2_command_publisher" in cmake_source
+    assert "find_package(aimdk_msgs QUIET)" in cmake_source
 
 
 def test_python_dependencies_come_from_the_system_environment() -> None:
@@ -122,9 +125,19 @@ def test_unified_launch_exposes_native_ik_backend_selection() -> None:
         encoding="utf-8"
     )
 
-    assert 'DeclareLaunchArgument(\n                "ik_backend"' in launch_source
+    assert '"ik_backend",\n            default_value="auto"' in launch_source
     assert 'choices=["auto", "native", "python"]' in launch_source
     assert '"ik_backend": ik_backend' in launch_source
+
+
+def test_unified_launch_exposes_cpp_command_publisher_selection() -> None:
+    launch_source = (PROJECT_ROOT / "launch/unified_grasp.launch.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert '"command_backend",\n            default_value="auto"' in launch_source
+    assert 'executable="x2_command_publisher"' in launch_source
+    assert '"command_backend": command_backend' in launch_source
 
 
 def test_workspace_has_open_source_project_metadata() -> None:
