@@ -38,6 +38,7 @@ DEFAULTS = {
     "gripper_reach": GRIPPER_REACH_M,
     "tag_depth": TAG_TO_OBJECT_DEPTH_M,
     "source": "grounding",
+    "arm_side": "auto",
     "backward": BACKWARD_M,
     "initial_upward": INITIAL_UPWARD_M,
     "grasp_x_offset": GRASP_X_OFFSET_M,
@@ -101,6 +102,12 @@ def build_parser() -> argparse.ArgumentParser:
                 choices=("grounding", "apriltag", "auto"),
                 default=default,
             )
+        elif name == "arm_side":
+            parser.add_argument(
+                option,
+                choices=("auto", "left", "right"),
+                default=default,
+            )
         elif isinstance(default, list):
             value_type = float if default and isinstance(default[0], float) else str
             parser.add_argument(option, nargs="+", type=value_type, default=list(default))
@@ -132,6 +139,8 @@ def parse_ros_params_into_args(node):
 def validate_parameters(args) -> None:
     if args.source not in {"grounding", "apriltag", "auto"}:
         raise ValueError("source must be grounding, apriltag, or auto")
+    if args.arm_side not in {"auto", "left", "right"}:
+        raise ValueError("arm_side must be auto, left, or right")
     numeric_names = [
         name for name, default in DEFAULTS.items() if isinstance(default, float)
     ]

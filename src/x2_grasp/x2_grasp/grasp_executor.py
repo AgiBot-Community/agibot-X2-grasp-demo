@@ -98,10 +98,11 @@ def execute_grasp(
     feedback=lambda _stage, _detail="": None,
 ):
     grip_position = grip_close_position_for(args, target)
+    side = plan.side.value
 
     feedback("preparing", "closing gripper and moving to clearance pose")
     _check_canceled(cancel_requested)
-    node.close_gripper("right", seconds=args.initial_close_seconds)
+    node.close_gripper(side, seconds=args.initial_close_seconds)
     _publish_trajectory(
         node,
         current_arm_pos,
@@ -112,7 +113,7 @@ def execute_grasp(
 
     feedback("approaching", "opening gripper and moving to pre-grasp pose")
     _check_canceled(cancel_requested)
-    node.open_gripper("right", seconds=args.open_seconds)
+    node.open_gripper(side, seconds=args.open_seconds)
     _publish_trajectory(
         node,
         plan.retract_arm_pos,
@@ -134,10 +135,10 @@ def execute_grasp(
         )
         approach_start = approach_result.arm_pos
 
-    feedback("gripping", f"setting right gripper to {grip_position:.3f}")
+    feedback("gripping", f"setting {side} gripper to {grip_position:.3f}")
     _check_canceled(cancel_requested)
     node.set_gripper_position(
-        "right", grip_position, seconds=args.grip_close_seconds
+        side, grip_position, seconds=args.grip_close_seconds
     )
 
     lift_start = plan.grasp.arm_pos

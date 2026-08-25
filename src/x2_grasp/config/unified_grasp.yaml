@@ -84,6 +84,8 @@ x2_grasp_node:
     action_name: /x2_grasp/grasp
     execute: false
     source: grounding
+    # auto 会根据左右臂完整 IK 规划结果选择可达且关节运动量更小的一侧。
+    arm_side: auto
     grounding_command_topic: /x2_grasp/grounding_target
     arbitration_probe_timeout: 0.5
     arbitration_tag_freshness: 1.0

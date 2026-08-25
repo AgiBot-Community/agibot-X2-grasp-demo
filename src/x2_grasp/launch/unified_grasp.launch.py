@@ -23,6 +23,7 @@ def generate_launch_description() -> LaunchDescription:
         / "unified_grasp.yaml"
     )
     mode = LaunchConfiguration("mode")
+    arm_side = LaunchConfiguration("arm_side")
     execute = ParameterValue(LaunchConfiguration("execute"), value_type=bool)
 
     return LaunchDescription(
@@ -37,6 +38,12 @@ def generate_launch_description() -> LaunchDescription:
                 "execute",
                 default_value="false",
                 description="false only solves IK; true moves the real robot",
+            ),
+            DeclareLaunchArgument(
+                "arm_side",
+                default_value="auto",
+                description="automatically select an arm or force left/right",
+                choices=["auto", "left", "right"],
             ),
             Node(
                 package="x2_grasp",
@@ -67,7 +74,10 @@ def generate_launch_description() -> LaunchDescription:
                 executable="grasp_node",
                 name="x2_grasp_node",
                 output="screen",
-                parameters=[config, {"source": mode, "execute": execute}],
+                parameters=[
+                    config,
+                    {"source": mode, "arm_side": arm_side, "execute": execute},
+                ],
             ),
         ]
     )

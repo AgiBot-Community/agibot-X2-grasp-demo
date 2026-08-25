@@ -10,9 +10,9 @@ import numpy as np
 from x2_arm.config import ArmSide
 
 from .grasp_constants import (
+    ARM_CENTERLINE_CLEARANCE,
     GRASP_AXIS_WORLD,
     GRASP_X_REACHABLE,
-    RIGHT_ARM_Y_MAX,
     SOURCE_LABELS,
     TARGET_X_RANGE,
     TARGET_Y_RANGE,
@@ -43,19 +43,28 @@ def validate_target(xyz, frame_id, source_label):
             )
 
 
-def check_reachable(grasp_xyz, target_xyz, args, source_label):
+def check_reachable(grasp_xyz, target_xyz, args, source_label, side):
     grasp_x, grasp_y = grasp_xyz[0], grasp_xyz[1]
     low_x, high_x = GRASP_X_REACHABLE
     problems = []
-    if grasp_y > RIGHT_ARM_Y_MAX:
+    if side == ArmSide.RIGHT and grasp_y > -ARM_CENTERLINE_CLEARANCE:
         problems.append(
             f"抓取点 Y={grasp_y:.3f} 比右臂可达上限 "
-            f"{RIGHT_ARM_Y_MAX:.2f} 更靠中线"
+            f"{-ARM_CENTERLINE_CLEARANCE:.2f} 更靠中线"
+        )
+    if side == ArmSide.LEFT and grasp_y < ARM_CENTERLINE_CLEARANCE:
+        problems.append(
+            f"抓取点 Y={grasp_y:.3f} 比左臂可达下限 "
+            f"{ARM_CENTERLINE_CLEARANCE:.2f} 更靠中线"
         )
     if grasp_x > high_x:
-        problems.append(f"抓取点 X={grasp_x:.3f} 超出右臂前伸极限 {high_x:.2f}")
+        problems.append(
+            f"抓取点 X={grasp_x:.3f} 超出{side.value}臂前伸极限 {high_x:.2f}"
+        )
     if grasp_x < low_x:
-        problems.append(f"抓取点 X={grasp_x:.3f} 低于右臂近身极限 {low_x:.2f}")
+        problems.append(
+            f"抓取点 X={grasp_x:.3f} 低于{side.value}臂近身极限 {low_x:.2f}"
+        )
     if problems:
         raise RuntimeError(
             f"{source_label}目标不可达（抓取点={grasp_xyz}，视觉目标={target_xyz}）："
@@ -63,11 +72,12 @@ def check_reachable(grasp_xyz, target_xyz, args, source_label):
         )
 
 
-def ik_seed_candidates(node, primary, retract, perturbation):
+def ik_seed_candidates(node, primary, retract, perturbation, side=ArmSide.RIGHT):
     candidates = [list(primary)]
     if any(abs(a - b) > 1e-9 for a, b in zip(primary, retract)):
         candidates.append(list(retract))
-    for index in (9, 10, 13):
+    offset = 0 if side == ArmSide.LEFT else 7
+    for index in (offset + 2, offset + 3, offset + 6):
         for direction in (-1.0, 1.0):
             candidate = list(primary)
             candidate[index] += direction * perturbation
@@ -82,6 +92,7 @@ def solve_grasp_axis(
     retract_arm_pos,
     args,
     description,
+    side=ArmSide.RIGHT,
     approximate_position_tolerance=None,
     approximate_axis_tolerance=None,
     cancel_requested=lambda: False,
@@ -89,13 +100,17 @@ def solve_grasp_axis(
     results = []
     for seed_index, seed in enumerate(
         ik_seed_candidates(
-            node, current_arm_pos, retract_arm_pos, args.ik_seed_perturbation
+            node,
+            current_arm_pos,
+            retract_arm_pos,
+            args.ik_seed_perturbation,
+            side,
         ),
         1,
     ):
         _check_canceled(cancel_requested)
         result = node.solver.solve_axis(
-            side=ArmSide.RIGHT,
+            side=side,
             target_xyz=target_xyz,
             target_axis=GRASP_AXIS_WORLD,
             current_arm_pos=seed,
@@ -106,8 +121,8 @@ def solve_grasp_axis(
         if result.success:
             joint_travel = float(
                 np.linalg.norm(
-                    np.asarray(result.arm_pos[7:])
-                    - np.asarray(current_arm_pos[7:])
+                    np.asarray(result.arm_pos[_arm_slice(side)])
+                    - np.asarray(current_arm_pos[_arm_slice(side)])
                 )
             )
             result = SimpleNamespace(
@@ -159,7 +174,7 @@ def solve_grasp_axis(
 
 
 def solve_lift_steps(
-    node, grasp_xyz, grasp_result, retract_arm_pos, args, cancel_requested
+    node, grasp_xyz, grasp_result, retract_arm_pos, args, cancel_requested, side
 ):
     results = []
     achieved = 0.0
@@ -175,6 +190,7 @@ def solve_lift_steps(
                 retract_arm_pos,
                 args,
                 f"抓取后分步抬高到{next_height * 100:.0f}cm",
+                side=side,
                 cancel_requested=cancel_requested,
             )
         except GraspCancelled:
@@ -202,6 +218,7 @@ def solve_cartesian_segment(
     args,
     description,
     cancel_requested=lambda: False,
+    side=ArmSide.RIGHT,
 ):
     start = np.asarray(start_xyz, dtype=float)
     target = np.asarray(target_xyz, dtype=float)
@@ -219,6 +236,7 @@ def solve_cartesian_segment(
             retract_arm_pos,
             args,
             f"{description} {step}/{steps}",
+            side=side,
             cancel_requested=cancel_requested,
         )
         results.append(result)
@@ -235,6 +253,7 @@ def solve_high_retract_segment(
     args,
     description,
     cancel_requested=lambda: False,
+    side=ArmSide.RIGHT,
 ):
     start = np.asarray(start_xyz, dtype=float)
     target = np.asarray(target_xyz, dtype=float)
@@ -253,6 +272,7 @@ def solve_high_retract_segment(
                 retract_arm_pos,
                 args,
                 f"{description} {step}/{steps}",
+                side=side,
                 approximate_position_tolerance=(
                     args.high_retract_position_tolerance
                 ),
@@ -269,18 +289,54 @@ def solve_high_retract_segment(
     return results
 
 
-def plan_grasp(
+def _arm_slice(side):
+    return slice(0, 7) if side == ArmSide.LEFT else slice(7, 14)
+
+
+def _plan_joint_travel(plan, current_arm_pos):
+    states = [
+        current_arm_pos,
+        plan.retract_arm_pos,
+        plan.pre_grasp.arm_pos,
+        *(result.arm_pos for result in plan.approach_steps),
+        *(result.arm_pos for result in plan.lift_steps),
+        *(result.arm_pos for result in plan.high_retract_steps),
+    ]
+    active = _arm_slice(plan.side)
+    return sum(
+        float(
+            np.linalg.norm(
+                np.asarray(after[active], dtype=float)
+                - np.asarray(before[active], dtype=float)
+            )
+        )
+        for before, after in zip(states, states[1:])
+    )
+
+
+def _plan_grasp_for_side(
     node,
     current_arm_pos,
     target_xyz,
     args,
     source,
+    side,
     cancel_requested=lambda: False,
     feedback=lambda _stage, _detail="": None,
 ):
     feedback("planning", "solving staged grasp IK")
     _check_canceled(cancel_requested)
-    current_xyz = node.solver.fk_xyz(ArmSide.RIGHT, current_arm_pos)
+    depth_offset = args.tag_depth if source == "apriltag" else 0.0
+    object_center_x = target_xyz[0] + depth_offset
+    grasp_xyz = [
+        object_center_x - args.gripper_reach + args.grasp_x_offset,
+        target_xyz[1],
+        args.grasp_plane_z,
+    ]
+    source_label = SOURCE_LABELS[source]
+    check_reachable(grasp_xyz, target_xyz, args, source_label, side)
+
+    current_xyz = node.solver.fk_xyz(side, current_arm_pos)
     retract_xyz = [
         current_xyz[0] - args.backward,
         current_xyz[1],
@@ -293,19 +349,10 @@ def plan_grasp(
         current_arm_pos,
         args,
         "准备段后撤抬高",
+        side=side,
         cancel_requested=cancel_requested,
     )
     retract_arm_pos = retract_result.arm_pos
-    depth_offset = args.tag_depth if source == "apriltag" else 0.0
-    object_center_x = target_xyz[0] + depth_offset
-    grasp_xyz = [
-        object_center_x - args.gripper_reach + args.grasp_x_offset,
-        target_xyz[1],
-        args.grasp_plane_z,
-    ]
-    source_label = SOURCE_LABELS[source]
-    check_reachable(grasp_xyz, target_xyz, args, source_label)
-
     standoff = args.standoff
     min_pre_x = GRASP_X_REACHABLE[0]
     if grasp_xyz[0] - standoff < min_pre_x - 1e-6:
@@ -324,6 +371,7 @@ def plan_grasp(
         retract_arm_pos,
         args,
         "预抓取点",
+        side=side,
         cancel_requested=cancel_requested,
     )
     approach_results = solve_cartesian_segment(
@@ -335,6 +383,7 @@ def plan_grasp(
         args,
         "水平接近",
         cancel_requested,
+        side,
     )
     grasp_result = approach_results[-1]
     lift_results, achieved_lift = solve_lift_steps(
@@ -344,6 +393,7 @@ def plan_grasp(
         retract_arm_pos,
         args,
         cancel_requested,
+        side,
     )
     post_grasp_xyz = [
         grasp_xyz[0],
@@ -364,8 +414,10 @@ def plan_grasp(
         args,
         "高位后撤",
         cancel_requested,
+        side,
     )
     return SimpleNamespace(
+        side=side,
         retract=retract_result,
         retract_arm_pos=retract_arm_pos,
         pre_grasp=pre_grasp_result,
@@ -376,6 +428,75 @@ def plan_grasp(
         high_retract_steps=high_retract_results,
         achieved_lift=achieved_lift,
     )
+
+
+def plan_grasp(
+    node,
+    current_arm_pos,
+    target_xyz,
+    args,
+    source,
+    cancel_requested=lambda: False,
+    feedback=lambda _stage, _detail="": None,
+):
+    requested_side = getattr(args, "arm_side", "auto")
+    if requested_side != "auto":
+        return _plan_grasp_for_side(
+            node,
+            current_arm_pos,
+            target_xyz,
+            args,
+            source,
+            ArmSide(requested_side),
+            cancel_requested,
+            feedback,
+        )
+
+    plans = []
+    failures = []
+    preferred = (
+        (ArmSide.LEFT, ArmSide.RIGHT)
+        if target_xyz[1] >= 0.0
+        else (ArmSide.RIGHT, ArmSide.LEFT)
+    )
+    for side in preferred:
+        _check_canceled(cancel_requested)
+        feedback("planning", f"evaluating {side.value} arm")
+        try:
+            plan = _plan_grasp_for_side(
+                node,
+                current_arm_pos,
+                target_xyz,
+                args,
+                source,
+                side,
+                cancel_requested,
+                feedback,
+            )
+        except GraspCancelled:
+            raise
+        except RuntimeError as error:
+            failures.append(f"{side.value}: {error}")
+            node.node.get_logger().warning(
+                f"{side.value} arm grasp plan rejected: {error}"
+            )
+            continue
+        plan.selection_cost = _plan_joint_travel(plan, current_arm_pos)
+        plans.append(plan)
+
+    if not plans:
+        raise RuntimeError("左右臂均无法完成抓取规划：" + "；".join(failures))
+    selected = min(plans, key=lambda plan: plan.selection_cost)
+    node.node.get_logger().info(
+        f"selected {selected.side.value} arm; "
+        f"joint_travel={selected.selection_cost:.3f}"
+    )
+    feedback(
+        "planning",
+        f"selected {selected.side.value} arm "
+        f"(joint travel {selected.selection_cost:.3f} rad)",
+    )
+    return selected
 
 
 def grip_close_position_for(args, target):
