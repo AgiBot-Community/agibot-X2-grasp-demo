@@ -32,6 +32,18 @@ ros2 launch x2_grasp unified_grasp.launch.py \
   mode:=apriltag ik_backend:=native execute:=false
 ```
 
+若 CMake 已识别 Python 3.10，但仍报告 `Could NOT find PythonInterp (missing:
+PYTHON_EXECUTABLE)`，应清理 CMake 缓存并显式使用 ROS Humble 的系统 Python：
+
+```bash
+colcon build --packages-select x2_grasp --symlink-install \
+  --cmake-clean-cache \
+  --cmake-args -DCMAKE_BUILD_TYPE=Release \
+  -DPYTHON_EXECUTABLE=/usr/bin/python3
+```
+
+不要把 Conda 或其他 Python 环境的解释器传给 ROS 接口生成和 pybind11 构建。
+
 ## 找不到 x2_grasp 接口
 
 ```bash
