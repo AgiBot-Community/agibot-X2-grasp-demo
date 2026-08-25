@@ -17,6 +17,7 @@ sys.path.insert(0, str(PACKAGE_ROOT))
 import pinocchio  # noqa: E402
 
 from x2_arm import ArmSide, X2IKConfig, create_ik_solver  # noqa: E402
+from x2_arm.trajectory import interpolate_arm_pos  # noqa: E402
 from x2_grasp.grasp_planner import ik_seed_candidates  # noqa: E402
 
 
@@ -46,14 +47,18 @@ def main() -> int:
     )
     parser.add_argument("--micro-iterations", type=int, default=5_000)
     parser.add_argument("--solve-iterations", type=int, default=100)
+    parser.add_argument("--init-iterations", type=int, default=10)
     parser.add_argument("--warmup", type=int, default=10)
     args = parser.parse_args()
 
     side = ArmSide(args.side)
-    solver = create_ik_solver(X2IKConfig.default_omnipicker(), args.backend)
+    config = X2IKConfig.default_omnipicker()
+    solver = create_ik_solver(config, args.backend)
     seed = solver.ready_arm_pos()
     current_xyz = solver.fk_xyz(side, seed)
+    current_rpy = solver.fk_rpy(side, seed)
     current_axis = solver.fk_axis(side, seed)
+    seed_q = solver.q_from_arm_pos(seed)
     target_xyz = [current_xyz[0] + 0.005, current_xyz[1], current_xyz[2] + 0.005]
 
     class PlannerNode:
@@ -67,19 +72,60 @@ def main() -> int:
             iter(ik_seed_candidates(planner_node, seed, seed, 0.12, side))
         )
 
-    solve_iterations = []
+    solve_iterations = {"position": [], "pose": [], "pose_6d": [], "axis": []}
+
+    def solve_position():
+        result = solver.solve_position(side, target_xyz, seed)
+        if not result.success:
+            raise RuntimeError(result.message)
+        solve_iterations["position"].append(result.iterations)
+
+    def solve_pose():
+        result = solver.solve_pose(side, target_xyz, current_rpy, seed)
+        if not result.success:
+            raise RuntimeError(result.message)
+        solve_iterations["pose"].append(result.iterations)
+
+    def solve_6d():
+        result = solver.solve_6d(side, target_xyz + current_rpy, seed)
+        if not result.success:
+            raise RuntimeError(result.message)
+        solve_iterations["pose_6d"].append(result.iterations)
 
     def solve_axis():
         result = solver.solve_axis(side, target_xyz, current_axis, seed)
         if not result.success:
             raise RuntimeError(result.message)
-        solve_iterations.append(result.iterations)
+        solve_iterations["axis"].append(result.iterations)
+
+    chain_waypoints = [
+        [
+            current_xyz[0] + 0.01 * step / 8,
+            current_xyz[1],
+            current_xyz[2] + 0.01 * step / 8,
+        ]
+        for step in range(1, 9)
+    ]
+    trajectory_goal = [value + 0.5 for value in seed]
+
+    def solve_cartesian_chain():
+        chain_seed = seed
+        for waypoint in chain_waypoints:
+            result = solver.solve_axis(side, waypoint, current_axis, chain_seed)
+            if not result.success:
+                raise RuntimeError(result.message)
+            chain_seed = result.arm_pos
 
     result = {
         "pinocchio_version": pinocchio.__version__,
         "requested_backend": args.backend,
         "backend": solver.backend,
         "side": side.value,
+        "solver_init": _measure(
+            lambda: create_ik_solver(config, args.backend),
+            args.init_iterations,
+            min(args.warmup, 2),
+        ),
         "operations": {
             "clip_arm_pos": _measure(
                 lambda: solver.clip_arm_pos(seed),
@@ -91,8 +137,33 @@ def main() -> int:
                 args.micro_iterations,
                 args.warmup,
             ),
+            "fk_rpy": _measure(
+                lambda: solver.fk_rpy(side, seed),
+                args.micro_iterations,
+                args.warmup,
+            ),
+            "fk_axis": _measure(
+                lambda: solver.fk_axis(side, seed),
+                args.micro_iterations,
+                args.warmup,
+            ),
+            "q_from_arm_pos": _measure(
+                lambda: solver.q_from_arm_pos(seed),
+                args.micro_iterations,
+                args.warmup,
+            ),
+            "arm_pos_from_q": _measure(
+                lambda: solver.arm_pos_from_q(seed_q),
+                args.micro_iterations,
+                args.warmup,
+            ),
             "first_ik_seed": _measure(
                 first_seed,
+                args.micro_iterations,
+                args.warmup,
+            ),
+            "trajectory_interpolation_101": _measure(
+                lambda: interpolate_arm_pos(seed, trajectory_goal),
                 args.micro_iterations,
                 args.warmup,
             ),
@@ -101,9 +172,31 @@ def main() -> int:
                 args.solve_iterations,
                 args.warmup,
             ),
+            "solve_position": _measure(
+                solve_position,
+                args.solve_iterations,
+                args.warmup,
+            ),
+            "solve_pose": _measure(
+                solve_pose,
+                args.solve_iterations,
+                args.warmup,
+            ),
+            "solve_6d": _measure(
+                solve_6d,
+                args.solve_iterations,
+                args.warmup,
+            ),
+            "solve_cartesian_chain_8": _measure(
+                solve_cartesian_chain,
+                args.solve_iterations,
+                args.warmup,
+            ),
         },
     }
-    result["solve_axis_iterations_mean"] = statistics.fmean(solve_iterations)
+    result["solver_iterations_mean"] = {
+        name: statistics.fmean(values) for name, values in solve_iterations.items()
+    }
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
 

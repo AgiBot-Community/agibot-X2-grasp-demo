@@ -210,8 +210,9 @@ source install/setup.bash
 /usr/bin/python3 scripts/benchmark_ik.py --backend native
 ```
 
-基准输出包含关节限位裁剪、FK、首个规划初值和轴向 IK 的平均值、中位数与 P95。
+基准输出包含求解器构造、关节/配置映射、全部 FK、位置/姿态/6D/轴向 IK、8 点链式规划和轨迹插值的平均值、中位数与 P95。
 抓取节点的 `ik_backend` 参数支持 `auto`、`native` 和 `python`；默认 `auto` 优先使用已构建的 C++ 后端，扩展不可用时回退 Python。
+完整迁移清单、左右臂逐项数据和保留 Python 的边界说明见 [性能与 C++ 迁移](docs/PERFORMANCE.md)。
 
 完整测试需要 ROS 2、AimDK、Pinocchio、OpenCV 和目标机器人消息环境。提交问题或 Pull Request 时，请注明实际执行过的测试范围。
 
