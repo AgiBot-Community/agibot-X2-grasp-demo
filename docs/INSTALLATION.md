@@ -97,7 +97,12 @@ Python，但性能不符合原生基准。显式要求原生后端可用：
 ros2 run x2_grasp x2_ik_demo --ik-backend native --limits
 ```
 
-目标机器人环境提供 `aimdk_msgs` 时，CMake 会额外构建完整的 rclcpp 发布节点。确认：
+`x2_command_publisher` 属于同一个 `x2_grasp` 功能包，不需要另外克隆、安装或构建其他功能包。
+只要在执行 `colcon build` 前正确 source AimDK，使 `find_package(aimdk_msgs)` 成功，CMake 就会
+自动编译该节点，`colcon` 会自动把它安装到 `install/x2_grasp/lib/x2_grasp/`。统一 launch 在
+`command_backend:=auto` 时检测、启动并连接该节点。
+
+构建后确认：
 
 ```bash
 test -x install/x2_grasp/lib/x2_grasp/x2_command_publisher

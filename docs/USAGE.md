@@ -23,8 +23,9 @@ ros2 launch x2_grasp unified_grasp.launch.py \
   'from x2_arm import native_backend_available; print(native_backend_available())'
 ```
 
-`command_backend:=auto` 在安装目录存在真机构建的 `x2_command_publisher` 时启动并使用完整
-C++ 发布节点，否则回退 Python。真机验收使用 `command_backend:=native`，节点缺失或内部
+`x2_command_publisher` 是本功能包的一部分，无需单独安装。构建前已 source AimDK 时，本包会
+自动编译和安装它；`command_backend:=auto` 随后由统一 launch 自动启动并使用该 C++ 节点，
+未构建出该目标时才回退 Python。真机验收使用 `command_backend:=native`，节点缺失或内部
 Action 不可用时会拒绝执行，不会静默回退。
 
 ## AprilTag 模式

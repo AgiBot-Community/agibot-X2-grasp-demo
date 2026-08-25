@@ -79,6 +79,10 @@ source ~/.aima/env/bashrc
 安装脚本通过 apt 安装 `ros-humble-pinocchio`、`ros-humble-pybind11-vendor`、
 `pybind11-dev`、`libopencv-dev`、`python3-numpy` 和 `python3-opencv`。
 
+`x2_command_publisher` 是 `x2_grasp` 包内的构建目标，不需要单独安装。真机构建前加载 AimDK
+后，CMake 检测到 `aimdk_msgs` 会自动编译并由 `colcon` 安装该 C++ 节点；统一 launch 在
+`command_backend:=auto` 时会自动启动和使用它。没有 `aimdk_msgs` 的开发环境只跳过该真机目标。
+
 ### 3. 构建
 
 ```bash

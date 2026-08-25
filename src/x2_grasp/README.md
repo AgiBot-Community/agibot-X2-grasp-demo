@@ -217,6 +217,10 @@ ros2 interface show x2_grasp/msg/PerceptionStatus
 | `open_seconds` | 张爪持续时间 | `0.5 s` |
 | `grip_close_seconds` | 抓取闭爪持续时间 | `2.0 s` |
 
+`x2_command_publisher` 是本包内的 CMake 目标，不需要单独安装。真机构建前 source AimDK 后，
+本包会自动检测 `aimdk_msgs`、编译并安装该节点；统一 launch 在 `command_backend:=auto` 时自动
+启动它。通用开发环境未提供 `aimdk_msgs` 时只跳过该真机目标，并保留 Python 兼容路径。
+
 五个目标配置数组按下标对应，夹爪位置为 `0.0`（完全闭合）到 `1.0`（完全张开）。即使使用
 AprilTag 模式，坐标定位不区分物品类型，最终闭合值和提示音仍按输入类型选择。完整扩展示例
 见仓库根目录 `docs/CONFIGURATION.md`。

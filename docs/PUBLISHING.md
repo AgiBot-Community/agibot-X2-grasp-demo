@@ -42,7 +42,7 @@ C++ x2_command_publisher
 
 | 值 | 行为 |
 | --- | --- |
-| `auto` | 安装目录存在 C++ 节点时启动并连接；否则回退 Python 兼容发布器 |
+| `auto` | 本包构建出了 C++ 节点时由统一 launch 自动启动并连接；否则回退 Python 兼容发布器 |
 | `native` | 必须存在并连接 C++ 节点，否则拒绝启动 |
 | `python` | 强制使用原 Python 发布路径，用于兼容和对照 |
 
@@ -54,6 +54,19 @@ ros2 launch x2_grasp unified_grasp.launch.py \
 ```
 
 `execute:=false` 不发送运动，但仍会检查原生节点是否已构建并可连接。
+
+### 自动构建、安装和启动
+
+`x2_command_publisher` 不是外部组件，而是 `x2_grasp` 的条件编译目标。完整生命周期由本包管理：
+
+1. 构建终端先 source ROS 2 和真机 AimDK 环境。
+2. 本包 CMake 自动检测 `aimdk_msgs` 并编译 `x2_command_publisher`。
+3. 同一次 `colcon build` 自动安装该节点，无需单独执行安装命令。
+4. `unified_grasp.launch.py` 在 `command_backend:=auto|native` 时自动启动已安装的节点。
+5. Python 抓取节点连接内部 `ExecuteCommand` Action；`auto` 连接失败时回退，`native` 直接报错。
+
+因此，“自动使用”的前提只是构建前正确加载 AimDK，使本包能够找到其 C++ 消息和 typesupport，
+不是要求用户另行安装发布节点。
 
 ## 调度与停止
 

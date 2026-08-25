@@ -104,7 +104,7 @@ python3 scripts/generate_completion_tone.py
 | --- | --- | --- |
 | `arm_side` | `auto` | `auto` 分别验证左右臂规划并选择关节运动量较小的一侧；也可固定为 `left` 或 `right` |
 | `ik_backend` | `auto` | `auto` 优先原生 C++ 并在扩展缺失时回退；`native` 禁止回退；`python` 用于对照和排查 |
-| `command_backend` | `auto` | `auto` 在真机构建存在时使用 C++ 发布节点；`native` 禁止回退；`python` 保留兼容路径 |
+| `command_backend` | `auto` | AimDK 可用时本包自动构建、安装和启动 C++ 节点；`native` 禁止回退；`python` 保留兼容路径 |
 | `gripper_reach` | `0.11` | 末端 frame 到抓取中心距离 |
 | `tag_depth` | `0.03` | 标签平面到物体中心的 X 偏移 |
 | `standoff` | `0.12` | 预抓取水平距离 |
