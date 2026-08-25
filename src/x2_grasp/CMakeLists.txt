@@ -79,7 +79,11 @@ install(TARGETS x2_grasp_rgbd_geometry rgbd_localizer
   RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
 install(DIRECTORY include/ DESTINATION include)
-install(DIRECTORY audio launch urdf DESTINATION share/${PROJECT_NAME})
+install(DIRECTORY audio launch urdf
+  DESTINATION share/${PROJECT_NAME}
+  PATTERN "__pycache__" EXCLUDE
+  PATTERN "*.pyc" EXCLUDE
+)
 install(FILES config/unified_grasp.yaml
   DESTINATION share/${PROJECT_NAME}/config
 )
