@@ -11,7 +11,9 @@ fi
 install_system_dependencies() {
   local -a packages=(
     "ros-${ros_distro}-pinocchio"
+    "ros-${ros_distro}-pybind11-vendor"
     libopencv-dev
+    pybind11-dev
     python3-numpy
     python3-opencv
   )

@@ -16,6 +16,8 @@
   <depend>cv_bridge</depend>
   <depend>geometry_msgs</depend>
   <depend>message_filters</depend>
+  <depend>pinocchio</depend>
+  <depend>pybind11_vendor</depend>
   <depend>rclcpp</depend>
   <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
@@ -28,7 +30,6 @@
   <exec_depend>diagnostic_msgs</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
-  <exec_depend>pinocchio</exec_depend>
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>python3-opencv</exec_depend>
   <exec_depend>rclpy</exec_depend>

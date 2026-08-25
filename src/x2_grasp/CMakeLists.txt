@@ -15,6 +15,11 @@ find_package(cv_bridge REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(message_filters REQUIRED)
 find_package(OpenCV REQUIRED)
+find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
+set(PYTHON_EXECUTABLE "${Python3_EXECUTABLE}")
+find_package(pinocchio REQUIRED)
+find_package(pybind11_vendor REQUIRED)
+find_package(pybind11 REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -40,6 +45,27 @@ foreach(python_package IN ITEMS x2_grasp x2_arm x2_common)
     PATTERN "*.pyc" EXCLUDE
   )
 endforeach()
+
+add_library(x2_grasp_ik STATIC src/ik_solver.cpp)
+set_target_properties(x2_grasp_ik PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_include_directories(x2_grasp_ik
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+target_compile_features(x2_grasp_ik PUBLIC cxx_std_17)
+target_link_libraries(x2_grasp_ik PUBLIC pinocchio::pinocchio)
+
+pybind11_add_module(x2_ik_native MODULE src/ik_bindings.cpp)
+target_compile_features(x2_ik_native PRIVATE cxx_std_17)
+target_link_libraries(x2_ik_native PRIVATE x2_grasp_ik)
+set_target_properties(x2_ik_native PROPERTIES
+  OUTPUT_NAME "_x2_ik_native"
+  LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+)
+install(TARGETS x2_ik_native
+  LIBRARY DESTINATION "${PYTHON_INSTALL_DIR}/x2_arm"
+)
 
 add_library(x2_grasp_rgbd_geometry STATIC src/geometry.cpp)
 target_include_directories(x2_grasp_rgbd_geometry
@@ -73,7 +99,7 @@ ament_target_dependencies(rgbd_localizer
   tf2_ros
 )
 
-install(TARGETS x2_grasp_rgbd_geometry rgbd_localizer
+install(TARGETS x2_grasp_ik x2_grasp_rgbd_geometry rgbd_localizer
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}
@@ -125,11 +151,11 @@ if(BUILD_TESTING)
   target_link_libraries(test_geometry_cpp x2_grasp_rgbd_geometry ${OpenCV_LIBRARIES})
 
   ament_add_pytest_test(test_x2_grasp_python test
-    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_BINARY_DIR}:${CMAKE_CURRENT_SOURCE_DIR}
     TIMEOUT 120
   )
 endif()
 
 ament_export_include_directories(include)
-ament_export_dependencies(OpenCV rosidl_default_runtime)
+ament_export_dependencies(OpenCV pinocchio rosidl_default_runtime)
 ament_package()
