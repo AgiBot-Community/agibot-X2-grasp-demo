@@ -98,7 +98,7 @@ ros2 run x2_grasp grasp_action_client bread
 
 1. 在目标机器人上完成依赖安装、构建和完整测试。
 2. 用 `execute:=false` 分别验证所有需要使用的目标和感知模式。
-3. 检查目标 frame 为 `base_link`、单位为米、坐标在右臂可达域内。
+3. 检查目标 frame 为 `base_link`、单位为米、坐标在所选机械臂可达域内；默认 `arm_side:=auto`。
 4. 检查 AprilTag 尺寸、相机内参、深度尺度和 TF。
 5. 清空机械臂工作空间，确认急停、夹爪和 AimDK 控制模式正常。
 6. 使用 `execute:=true` 启动，先执行单个低风险目标。
@@ -107,6 +107,9 @@ ros2 run x2_grasp grasp_action_client bread
 ros2 launch x2_grasp unified_grasp.launch.py \
   mode:=apriltag execute:=true
 ```
+
+默认 `arm_side:=auto`。标定或排查单侧机械臂时，可在启动命令中临时指定
+`arm_side:=left` 或 `arm_side:=right`。
 
 ## 运行观察
 

@@ -102,6 +102,7 @@ python3 scripts/generate_completion_tone.py
 
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
+| `arm_side` | `auto` | `auto` 分别验证左右臂规划并选择关节运动量较小的一侧；也可固定为 `left` 或 `right` |
 | `gripper_reach` | `0.11` | 末端 frame 到抓取中心距离 |
 | `tag_depth` | `0.03` | 标签平面到物体中心的 X 偏移 |
 | `standoff` | `0.12` | 预抓取水平距离 |
@@ -112,7 +113,9 @@ python3 scripts/generate_completion_tone.py
 | `cartesian_step` | `0.015` | 笛卡尔路径离散步长 |
 | `grasp_axis_orientation_eps` | `0.087` | 抓取轴方向容差，弧度 |
 
-这些参数与机器人末端 frame、夹爪结构和桌面高度直接相关，不能照搬到不同硬件。
+自动选臂仍受安全可达域约束：右臂用于机器人右侧（负 Y），左臂用于机器人左侧（正 Y）。
+若首选侧完整分段 IK 不可解，会尝试另一侧；两侧均不可解时 Action 返回各自失败原因。这些参数与
+机器人末端 frame、夹爪结构和桌面高度直接相关，不能照搬到不同硬件。
 
 ## 轨迹和夹爪
 
