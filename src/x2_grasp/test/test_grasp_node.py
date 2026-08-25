@@ -1,7 +1,9 @@
-from types import SimpleNamespace
+import sys
+from types import ModuleType, SimpleNamespace
 
 import pytest
 from builtin_interfaces.msg import Time
+from x2_arm.config import ArmSide
 
 pytest.importorskip("rclpy")
 
@@ -22,6 +24,37 @@ class _RetryLogger:
 
     def warning(self, _message):
         pass
+
+
+@pytest.fixture(autouse=True)
+def _stub_aimdk_audio_interfaces(monkeypatch):
+    class Message:
+        pass
+
+    class AudioPlayback:
+        def __init__(self):
+            self.info = Message()
+            self.data = Message()
+
+    class Service:
+        class Request:
+            pass
+
+    package = ModuleType("aimdk_msgs")
+    messages = ModuleType("aimdk_msgs.msg")
+    services = ModuleType("aimdk_msgs.srv")
+    messages.AudioData = Message
+    messages.AudioInfo = Message
+    messages.AudioPlayback = AudioPlayback
+    messages.FocusRequester = Message
+    messages.FocusResponse = Message
+    services.AbandonAudioFocus = Service
+    services.RequestAudioFocus = Service
+    package.msg = messages
+    package.srv = services
+    monkeypatch.setitem(sys.modules, "aimdk_msgs", package)
+    monkeypatch.setitem(sys.modules, "aimdk_msgs.msg", messages)
+    monkeypatch.setitem(sys.modules, "aimdk_msgs.srv", services)
 
 
 class _RetryNode:
@@ -383,6 +416,7 @@ def test_execute_grasp_uses_high_retract_after_lift():
     raised = [0.3] * 14
     high_retract = [0.4] * 14
     plan = SimpleNamespace(
+        side=ArmSide.LEFT,
         retract_arm_pos=retract,
         retract_xyz=retract[:3],
         pre_grasp=SimpleNamespace(arm_pos=pre),
@@ -419,6 +453,8 @@ def test_execute_grasp_uses_high_retract_after_lift():
         (grasp, raised),
         (raised, high_retract),
     ]
+    hand_calls = [call for call in node.calls if call[0] in {"close", "open", "grip"}]
+    assert all(call[1] == "left" for call in hand_calls)
 
 
 def test_ik_seed_candidates_only_perturb_right_arm():
@@ -490,6 +526,7 @@ def test_execute_grasp_can_finish_without_high_retract():
     grasp = [0.3] * 14
     raised = [0.4] * 14
     plan = SimpleNamespace(
+        side=ArmSide.RIGHT,
         retract_arm_pos=retract,
         pre_grasp=SimpleNamespace(arm_pos=pre),
         approach_steps=[SimpleNamespace(arm_pos=grasp)],
@@ -520,6 +557,7 @@ def test_execute_grasp_can_finish_without_high_retract():
 def test_execute_grasp_stops_before_motion_when_action_is_canceled():
     node = _Node()
     plan = SimpleNamespace(
+        side=ArmSide.RIGHT,
         retract_arm_pos=[0.1] * 14,
         pre_grasp=SimpleNamespace(arm_pos=[0.2] * 14),
         approach_steps=[SimpleNamespace(arm_pos=[0.3] * 14)],

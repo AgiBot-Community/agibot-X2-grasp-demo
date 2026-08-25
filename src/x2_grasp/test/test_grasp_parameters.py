@@ -26,6 +26,8 @@ def test_parameter_validation_rejects_unsafe_motion_values() -> None:
         validate_parameters(_args(target_grip_close_positions=[1.1, 0.1, 0.1]))
     with pytest.raises(ValueError, match="action_name"):
         validate_parameters(_args(action_name=""))
+    with pytest.raises(ValueError, match="arm_side"):
+        validate_parameters(_args(arm_side="middle"))
 
 
 def test_target_catalog_is_built_from_parallel_config_arrays() -> None:
