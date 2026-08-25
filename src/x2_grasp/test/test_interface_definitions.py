@@ -50,6 +50,21 @@ def test_grasp_action_defines_goal_result_and_feedback() -> None:
     assert not (PROJECT_ROOT / "msg/GraspStatus.msg").exists()
 
 
+def test_internal_command_action_carries_stream_inputs_and_timing_metrics() -> None:
+    sections = (PROJECT_ROOT / "action/ExecuteCommand.action").read_text(
+        encoding="utf-8"
+    ).split("---")
+
+    assert len(sections) == 3
+    assert "float64[] start_arm_pos" in sections[0]
+    assert "float64[] goal_arm_pos" in sections[0]
+    assert "float64 duration" in sections[0]
+    assert "string hand" in sections[0]
+    assert "uint32 deadline_misses" in sections[1]
+    assert "int64 max_lateness_ns" in sections[1]
+    assert "bool hold_published" in sections[1]
+
+
 def test_perception_contracts_use_typed_stamps_and_results() -> None:
     assert {"created_at", "request_id", "target"} <= _fields("GroundingCommand")
     assert {

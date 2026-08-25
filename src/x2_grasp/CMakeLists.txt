@@ -21,12 +21,15 @@ find_package(pinocchio REQUIRED)
 find_package(pybind11_vendor REQUIRED)
 find_package(pybind11 REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_action REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(Threads REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
+  "action/ExecuteCommand.action"
   "action/Grasp.action"
   "msg/GroundingCommand.msg"
   "msg/GroundingResult.msg"
@@ -77,6 +80,39 @@ target_include_directories(x2_grasp_rgbd_geometry
 target_compile_features(x2_grasp_rgbd_geometry PUBLIC cxx_std_17)
 target_link_libraries(x2_grasp_rgbd_geometry PUBLIC ${OpenCV_LIBRARIES})
 
+add_library(x2_grasp_command_scheduler STATIC src/command_scheduler.cpp)
+target_include_directories(x2_grasp_command_scheduler
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+target_compile_features(x2_grasp_command_scheduler PUBLIC cxx_std_17)
+target_link_libraries(x2_grasp_command_scheduler PUBLIC Threads::Threads)
+
+find_package(aimdk_msgs QUIET)
+if(aimdk_msgs_FOUND)
+  add_executable(x2_command_publisher src/command_publisher_node.cpp)
+  target_include_directories(x2_command_publisher PRIVATE include)
+  target_compile_features(x2_command_publisher PRIVATE cxx_std_17)
+  rosidl_get_typesupport_target(command_cpp_typesupport_target
+    ${PROJECT_NAME} rosidl_typesupport_cpp)
+  target_link_libraries(x2_command_publisher
+    x2_grasp_command_scheduler
+    ${command_cpp_typesupport_target}
+  )
+  ament_target_dependencies(x2_command_publisher
+    aimdk_msgs
+    rclcpp
+    rclcpp_action
+  )
+  install(TARGETS x2_command_publisher
+    RUNTIME DESTINATION lib/${PROJECT_NAME}
+  )
+  message(STATUS "AimDK found: building the native C++ command publisher")
+else()
+  message(STATUS "AimDK not found: skipping the target-only C++ command publisher")
+endif()
+
 add_executable(rgbd_localizer src/localizer.cpp)
 target_include_directories(rgbd_localizer PRIVATE include ${OpenCV_INCLUDE_DIRS})
 target_compile_features(rgbd_localizer PRIVATE cxx_std_17)
@@ -99,7 +135,11 @@ ament_target_dependencies(rgbd_localizer
   tf2_ros
 )
 
-install(TARGETS x2_grasp_ik x2_grasp_rgbd_geometry rgbd_localizer
+install(TARGETS
+  x2_grasp_ik
+  x2_grasp_rgbd_geometry
+  x2_grasp_command_scheduler
+  rgbd_localizer
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}
@@ -150,6 +190,11 @@ if(BUILD_TESTING)
   target_include_directories(test_geometry_cpp PRIVATE include ${OpenCV_INCLUDE_DIRS})
   target_link_libraries(test_geometry_cpp x2_grasp_rgbd_geometry ${OpenCV_LIBRARIES})
 
+  ament_add_gtest(test_command_scheduler_cpp test/test_command_scheduler.cpp)
+  target_compile_features(test_command_scheduler_cpp PRIVATE cxx_std_17)
+  target_include_directories(test_command_scheduler_cpp PRIVATE include)
+  target_link_libraries(test_command_scheduler_cpp x2_grasp_command_scheduler)
+
   ament_add_pytest_test(test_x2_grasp_python test
     APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_BINARY_DIR}:${CMAKE_CURRENT_SOURCE_DIR}
     TIMEOUT 120
@@ -157,5 +202,5 @@ if(BUILD_TESTING)
 endif()
 
 ament_export_include_directories(include)
-ament_export_dependencies(OpenCV pinocchio rosidl_default_runtime)
+ament_export_dependencies(OpenCV pinocchio rclcpp_action rosidl_default_runtime)
 ament_package()

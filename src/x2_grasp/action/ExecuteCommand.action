@@ -1,0 +1,25 @@
+uint8 ARM_TRAJECTORY=1
+uint8 HAND_COMMAND=2
+
+uint8 kind
+float64[] start_arm_pos
+float64[] goal_arm_pos
+float64 duration
+string hand
+float64 left_hand_position
+float64 right_hand_position
+---
+bool success
+bool canceled
+bool watchdog_triggered
+uint32 frames_requested
+uint32 frames_published
+uint32 deadline_misses
+int64 max_lateness_ns
+float64 elapsed_seconds
+bool hold_published
+string error
+---
+uint32 frames_published
+uint32 deadline_misses
+int64 max_lateness_ns
