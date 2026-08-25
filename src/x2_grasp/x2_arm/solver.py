@@ -68,7 +68,9 @@ class X2ArmIKSolver:
         self.model = pin.buildModelFromUrdf(str(config.urdf_path))
         self.data = self.model.createData()
         self._validate_model()
+        self._cache_model_metadata()
         self._validate_joint_margin()
+        self._cache_effective_limits()
 
     def solve_position(
         self,
@@ -86,8 +88,8 @@ class X2ArmIKSolver:
 
         q = self._seed_q(current_arm_pos, current_head_pos, q_seed)
         frame_name = self.config.frame_for_side(side)
-        frame_id = self.model.getFrameId(frame_name)
-        active_v_idxs = self._active_velocity_indices(side)
+        frame_id = self._frame_ids[side]
+        active_v_idxs = self._active_v_idxs[side]
 
         err_norm = math.inf
         iterations = 0
@@ -224,8 +226,8 @@ class X2ArmIKSolver:
         target_rotation = pin.rpy.rpyToMatrix(*target_rpy_arr.tolist())
         q = self._seed_q(current_arm_pos, current_head_pos, q_seed)
         frame_name = self.config.frame_for_side(side)
-        frame_id = self.model.getFrameId(frame_name)
-        active_v_idxs = self._active_velocity_indices(side)
+        frame_id = self._frame_ids[side]
+        active_v_idxs = self._active_v_idxs[side]
 
         err_norm = math.inf
         pos_err_norm = math.inf
@@ -332,8 +334,8 @@ class X2ArmIKSolver:
 
         q = self._seed_q(current_arm_pos, current_head_pos, q_seed)
         frame_name = self.config.frame_for_side(side)
-        frame_id = self.model.getFrameId(frame_name)
-        active_v_idxs = self._active_velocity_indices(side)
+        frame_id = self._frame_ids[side]
+        active_v_idxs = self._active_v_idxs[side]
 
         err_norm = math.inf
         pos_err_norm = math.inf
@@ -365,7 +367,9 @@ class X2ArmIKSolver:
                 frame_id,
                 pin.ReferenceFrame.LOCAL_WORLD_ALIGNED,
             )
-            axis_projection = np.eye(3) - np.outer(current_axis, current_axis)
+            axis_projection = self._axis_identity - np.outer(
+                current_axis, current_axis
+            )
             axis_jacobian = axis_projection @ jacobian[3:, :]
             constrained_jacobian = np.vstack(
                 (jacobian[:3, :], orientation_weight * axis_jacobian)
@@ -416,7 +420,7 @@ class X2ArmIKSolver:
     ) -> list[float]:
         side = ArmSide(side)
         q = self._seed_q(current_arm_pos, current_head_pos, q_seed)
-        frame_id = self.model.getFrameId(self.config.frame_for_side(side))
+        frame_id = self._frame_ids[side]
         pin.forwardKinematics(self.model, self.data, q)
         pin.updateFramePlacements(self.model, self.data)
         return self.data.oMf[frame_id].translation.copy().tolist()
@@ -431,7 +435,7 @@ class X2ArmIKSolver:
     ) -> list[float]:
         side = ArmSide(side)
         q = self._seed_q(current_arm_pos, current_head_pos, q_seed)
-        frame_id = self.model.getFrameId(self.config.frame_for_side(side))
+        frame_id = self._frame_ids[side]
         pin.forwardKinematics(self.model, self.data, q)
         pin.updateFramePlacements(self.model, self.data)
         return pin.rpy.matrixToRpy(self.data.oMf[frame_id].rotation).tolist()
@@ -455,7 +459,7 @@ class X2ArmIKSolver:
         if norm < 1e-9:
             raise ValueError("local_axis must be non-zero")
         q = self._seed_q(current_arm_pos, current_head_pos, q_seed)
-        frame_id = self.model.getFrameId(self.config.frame_for_side(side))
+        frame_id = self._frame_ids[side]
         pin.forwardKinematics(self.model, self.data, q)
         pin.updateFramePlacements(self.model, self.data)
         world_axis = self.data.oMf[frame_id].rotation @ (axis / norm)
@@ -470,8 +474,7 @@ class X2ArmIKSolver:
         arm_values = np.asarray(list(arm_pos), dtype=float)
         if arm_values.shape != (14,) or not np.all(np.isfinite(arm_values)):
             raise ValueError("arm_pos must contain 14 finite values")
-        for joint_name, value in zip(ARM_POS_ORDER, arm_values):
-            self._set_scalar_joint(q, joint_name, value)
+        q[self._arm_q_idxs] = arm_values
         if current_head_pos is not None:
             head = np.asarray(list(current_head_pos), dtype=float)
             if head.shape != (2,) or not np.all(np.isfinite(head)):
@@ -481,11 +484,7 @@ class X2ArmIKSolver:
         return self._clip_q(q)
 
     def arm_pos_from_q(self, q: np.ndarray) -> list[float]:
-        values = []
-        for joint_name in ARM_POS_ORDER:
-            jid = self.model.getJointId(joint_name)
-            values.append(float(q[self.model.idx_qs[jid]]))
-        return values
+        return np.asarray(q)[self._arm_q_idxs].astype(float).tolist()
 
     def ready_arm_pos(self) -> list[float]:
         return list(self.config.ready_arm_pos())
@@ -496,36 +495,19 @@ class X2ArmIKSolver:
         values = np.asarray(list(arm_pos), dtype=float)
         if values.shape != (14,) or not np.all(np.isfinite(values)):
             raise ValueError("arm_pos must contain 14 finite values")
-        for index, (_, lower, upper) in enumerate(
-            self.effective_joint_limits_for_arm_pos()
-        ):
-            values[index] = min(max(values[index], lower), upper)
-        return values.tolist()
+        return np.clip(
+            values, self._effective_arm_lower, self._effective_arm_upper
+        ).tolist()
 
     def joint_limits_for_arm_pos(self) -> list[tuple[str, float, float]]:
         """Return the raw URDF limits in the SDK arm order."""
 
-        limits = []
-        for joint_name in ARM_POS_ORDER:
-            jid = self.model.getJointId(joint_name)
-            qidx = self.model.idx_qs[jid]
-            limits.append(
-                (
-                    joint_name,
-                    float(self.model.lowerPositionLimit[qidx]),
-                    float(self.model.upperPositionLimit[qidx]),
-                )
-            )
-        return limits
+        return list(self._raw_arm_limits)
 
     def effective_joint_limits_for_arm_pos(self) -> list[tuple[str, float, float]]:
         """Return arm limits after applying the configured safety margin."""
 
-        margin = self.config.joint_margin
-        return [
-            (name, lower + margin, upper - margin)
-            for name, lower, upper in self.joint_limits_for_arm_pos()
-        ]
+        return list(self._effective_arm_limits)
 
     def _seed_q(
         self,
@@ -548,12 +530,16 @@ class X2ArmIKSolver:
         self,
         jacobian: np.ndarray,
         err: np.ndarray,
-        active_v_idxs: list[int],
+        active_v_idxs: np.ndarray,
     ) -> np.ndarray:
         active_jacobian = jacobian[:, active_v_idxs]
         damping = self.config.damping
+        identity = self._dls_identities.get(active_jacobian.shape[0])
+        if identity is None:
+            identity = np.eye(active_jacobian.shape[0])
+            self._dls_identities[active_jacobian.shape[0]] = identity
         active_velocity = active_jacobian.T @ np.linalg.solve(
-            active_jacobian @ active_jacobian.T + damping * np.eye(active_jacobian.shape[0]),
+            active_jacobian @ active_jacobian.T + damping * identity,
             err,
         )
         velocity = np.zeros(self.model.nv)
@@ -561,25 +547,60 @@ class X2ArmIKSolver:
         return velocity
 
     def _active_velocity_indices(self, side: ArmSide) -> list[int]:
-        idxs = []
-        for joint_name in self.config.active_joints_for_side(side):
-            jid = self.model.getJointId(joint_name)
-            idxs.append(self.model.idx_vs[jid])
-        return idxs
+        return self._active_v_idxs[side].tolist()
 
     def _clip_q(self, q: np.ndarray) -> np.ndarray:
         # Only arm joints are actively controlled by this solver. Applying an
         # arm safety margin to passive joints would move neutral knee/waist
         # joints away from zero just because their URDF lower limit is zero.
-        lower = self.model.lowerPositionLimit.copy()
-        upper = self.model.upperPositionLimit.copy()
+        return np.minimum(np.maximum(q, self._clip_lower), self._clip_upper)
+
+    def _cache_model_metadata(self) -> None:
+        self._frame_ids = {
+            side: self.model.getFrameId(self.config.frame_for_side(side))
+            for side in ArmSide
+        }
+        joint_ids = [self.model.getJointId(name) for name in ARM_POS_ORDER]
+        self._arm_q_idxs = np.asarray(
+            [self.model.idx_qs[jid] for jid in joint_ids], dtype=int
+        )
+        self._active_v_idxs = {
+            side: np.asarray(
+                [
+                    self.model.idx_vs[self.model.getJointId(name)]
+                    for name in self.config.active_joints_for_side(side)
+                ],
+                dtype=int,
+            )
+            for side in ArmSide
+        }
+        self._raw_arm_limits = tuple(
+            (
+                name,
+                float(self.model.lowerPositionLimit[qidx]),
+                float(self.model.upperPositionLimit[qidx]),
+            )
+            for name, qidx in zip(ARM_POS_ORDER, self._arm_q_idxs)
+        )
+        self._axis_identity = np.eye(3)
+        self._dls_identities = {3: np.eye(3), 6: np.eye(6)}
+
+    def _cache_effective_limits(self) -> None:
         margin = self.config.joint_margin
-        for joint_name in ARM_POS_ORDER:
-            jid = self.model.getJointId(joint_name)
-            qidx = self.model.idx_qs[jid]
-            lower[qidx] += margin
-            upper[qidx] -= margin
-        return np.minimum(np.maximum(q, lower), upper)
+        self._effective_arm_limits = tuple(
+            (name, lower + margin, upper - margin)
+            for name, lower, upper in self._raw_arm_limits
+        )
+        self._effective_arm_lower = np.asarray(
+            [lower for _, lower, _ in self._effective_arm_limits]
+        )
+        self._effective_arm_upper = np.asarray(
+            [upper for _, _, upper in self._effective_arm_limits]
+        )
+        self._clip_lower = self.model.lowerPositionLimit.copy()
+        self._clip_upper = self.model.upperPositionLimit.copy()
+        self._clip_lower[self._arm_q_idxs] += margin
+        self._clip_upper[self._arm_q_idxs] -= margin
 
     def _validate_joint_margin(self) -> None:
         for joint_name, lower, upper in self.joint_limits_for_arm_pos():

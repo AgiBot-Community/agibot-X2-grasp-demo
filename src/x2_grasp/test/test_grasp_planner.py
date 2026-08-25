@@ -51,12 +51,28 @@ def test_ik_seed_candidates_only_perturb_selected_arm():
         (ArmSide.LEFT, slice(7, 14)),
         (ArmSide.RIGHT, slice(0, 7)),
     ):
-        candidates = ik_seed_candidates(
-            node, primary, primary, 0.12, side
+        candidates = list(
+            ik_seed_candidates(node, primary, primary, 0.12, side)
         )
 
         assert len(candidates) == 7
         assert all(candidate[unchanged] == primary[unchanged] for candidate in candidates)
+
+
+def test_ik_seed_candidates_are_generated_lazily():
+    node = _Node()
+    calls = []
+    node.solver.clip_arm_pos = lambda candidate: calls.append(candidate) or candidate
+    primary = [0.0] * 14
+
+    candidates = iter(
+        ik_seed_candidates(node, primary, primary, 0.12, ArmSide.RIGHT)
+    )
+
+    assert next(candidates) == primary
+    assert calls == []
+    next(candidates)
+    assert len(calls) == 1
 
 
 def test_reachability_is_mirrored_for_left_and_right_arms():

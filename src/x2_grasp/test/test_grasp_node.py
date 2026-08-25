@@ -463,7 +463,7 @@ def test_ik_seed_candidates_only_perturb_right_arm():
     retract = list(primary)
     retract[7:] = [0.0] * 7
 
-    candidates = ik_seed_candidates(node, primary, retract, 0.12)
+    candidates = list(ik_seed_candidates(node, primary, retract, 0.12))
 
     assert len(candidates) == 8
     assert all(candidate[:7] == primary[:7] for candidate in candidates)

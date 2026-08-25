@@ -73,16 +73,15 @@ def check_reachable(grasp_xyz, target_xyz, args, source_label, side):
 
 
 def ik_seed_candidates(node, primary, retract, perturbation, side=ArmSide.RIGHT):
-    candidates = [list(primary)]
+    yield list(primary)
     if any(abs(a - b) > 1e-9 for a, b in zip(primary, retract)):
-        candidates.append(list(retract))
+        yield list(retract)
     offset = 0 if side == ArmSide.LEFT else 7
     for index in (offset + 2, offset + 3, offset + 6):
         for direction in (-1.0, 1.0):
             candidate = list(primary)
             candidate[index] += direction * perturbation
-            candidates.append(node.solver.clip_arm_pos(candidate))
-    return candidates
+            yield node.solver.clip_arm_pos(candidate)
 
 
 def solve_grasp_axis(
