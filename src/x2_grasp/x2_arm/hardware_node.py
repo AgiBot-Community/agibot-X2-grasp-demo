@@ -8,7 +8,7 @@ from typing import Iterable
 
 from .config import ArmSide, X2IKConfig
 from .standalone_hand_api import StandaloneHandAPI
-from .solver import X2ArmIKSolver
+from .native_solver import create_ik_solver
 from .trajectory import interpolate_arm_pos
 
 
@@ -62,7 +62,7 @@ class X2HardwareNode:
             urdf_path=args.urdf if args.urdf else default_cfg.urdf_path,
             joint_margin=getattr(args, "joint_margin", default_cfg.joint_margin),
         )
-        self.solver = X2ArmIKSolver(cfg)
+        self.solver = create_ik_solver(cfg, getattr(args, "ik_backend", "auto"))
         self.publisher = self.node.create_publisher(UpperBodyCommandArray, args.command_topic, 10)
         self.joint_client = self.node.create_client(GetAllJointState, args.joint_state_service)
         self.action_client = self.node.create_client(SetMcAction, args.action_service)
@@ -266,6 +266,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=0.02,
         help="Keep arm joints this far (rad) inside URDF mechanical limits",
+    )
+    parser.add_argument(
+        "--ik-backend",
+        choices=("auto", "native", "python"),
+        default="auto",
+        help="IK implementation (auto prefers the native extension)",
     )
     parser.add_argument("--dry-run", action="store_true", help="Compute IK but do not publish motion")
     parser.add_argument("--duration", type=float, default=2.0)

@@ -39,6 +39,7 @@ DEFAULTS = {
     "tag_depth": TAG_TO_OBJECT_DEPTH_M,
     "source": "grounding",
     "arm_side": "auto",
+    "ik_backend": "auto",
     "backward": BACKWARD_M,
     "initial_upward": INITIAL_UPWARD_M,
     "grasp_x_offset": GRASP_X_OFFSET_M,
@@ -108,6 +109,12 @@ def build_parser() -> argparse.ArgumentParser:
                 choices=("auto", "left", "right"),
                 default=default,
             )
+        elif name == "ik_backend":
+            parser.add_argument(
+                option,
+                choices=("auto", "native", "python"),
+                default=default,
+            )
         elif isinstance(default, list):
             value_type = float if default and isinstance(default[0], float) else str
             parser.add_argument(option, nargs="+", type=value_type, default=list(default))
@@ -141,6 +148,8 @@ def validate_parameters(args) -> None:
         raise ValueError("source must be grounding, apriltag, or auto")
     if args.arm_side not in {"auto", "left", "right"}:
         raise ValueError("arm_side must be auto, left, or right")
+    if args.ik_backend not in {"auto", "native", "python"}:
+        raise ValueError("ik_backend must be auto, native, or python")
     numeric_names = [
         name for name, default in DEFAULTS.items() if isinstance(default, float)
     ]

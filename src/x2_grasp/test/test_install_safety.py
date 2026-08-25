@@ -14,13 +14,20 @@ def test_cmake_installs_only_public_grasp_config():
 def test_pinocchio_is_managed_as_a_ros_dependency():
     root = Path(__file__).resolve().parents[1]
     package = ET.parse(root / "package.xml").getroot()
-    dependencies = [item.text for item in package.findall("exec_depend")]
+    dependencies = [
+        item.text
+        for tag in ("depend", "exec_depend")
+        for item in package.findall(tag)
+    ]
     install_script = (root.parents[1] / "scripts/install_dependencies.sh").read_text(
         encoding="utf-8"
     )
 
     assert "pinocchio" in dependencies
+    assert "pybind11_vendor" in dependencies
     assert '"ros-${ros_distro}-pinocchio"' in install_script
+    assert '"ros-${ros_distro}-pybind11-vendor"' in install_script
+    assert "pybind11-dev" in install_script
     assert '"${apt[@]}" install -y "${packages[@]}"' in install_script
     for system_dependency in ("libopencv-dev", "python3-numpy", "python3-opencv"):
         assert system_dependency in install_script

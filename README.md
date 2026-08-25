@@ -201,6 +201,18 @@ colcon test-result --verbose
 PYTHONPATH=src/x2_grasp python3 -m pytest src/x2_grasp/test
 ```
 
+Pinocchio 热路径性能基准：
+
+```bash
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+/usr/bin/python3 scripts/benchmark_ik.py --backend python
+/usr/bin/python3 scripts/benchmark_ik.py --backend native
+```
+
+基准输出包含关节限位裁剪、FK、首个规划初值和轴向 IK 的平均值、中位数与 P95。
+抓取节点的 `ik_backend` 参数支持 `auto`、`native` 和 `python`；默认 `auto` 优先使用已构建的 C++ 后端，扩展不可用时回退 Python。
+
 完整测试需要 ROS 2、AimDK、Pinocchio、OpenCV 和目标机器人消息环境。提交问题或 Pull Request 时，请注明实际执行过的测试范围。
 
 ## 配置与凭据

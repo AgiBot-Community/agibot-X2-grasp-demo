@@ -31,6 +31,7 @@ def make_hardware_args(args):
         frame_id="mc_upper_body",
         hand_command_topic="/aima/hal/joint/hand/command",
         hand_publish_hz=50.0,
+        ik_backend=getattr(args, "ik_backend", "auto"),
     )
 
 
