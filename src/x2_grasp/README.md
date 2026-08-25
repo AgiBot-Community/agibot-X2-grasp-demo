@@ -9,7 +9,7 @@ X2 双臂自动选择视觉抓取的单一 ROS 2 功能包。包内包含消息�
 - 火山方舟视觉定位 API；
 - RGB 与对齐深度图的 C++ 三维定位；
 - AprilTag 36h11 定位；
-- Pinocchio IK、机械臂/夹爪控制和完整抓取动作。
+- C++17 Pinocchio/pybind11 原生 IK（含 Python 对照后端）、机械臂/夹爪控制和完整抓取动作。
 
 其中 Grounding 目标识别使用火山方舟远端 API，RGB 图像会发送到配置的 HTTPS 服务端；
 AprilTag 检测和 RGB-D 三维定位在本地执行。包内同时内置一份面向 Pinocchio IK 的简化 X2
@@ -126,8 +126,8 @@ API 网络/响应错误、空检测框、无有效深度、RGB-D 不同步以及
 ## 构建
 
 工作区的 `src/` 下只保留 `x2_grasp/`。依赖脚本通过 apt 安装
-`ros-${ROS_DISTRO}-pinocchio`、`python3-numpy`、`python3-opencv` 和 `libopencv-dev`，默认 ROS
-发行版为 Humble。
+`ros-${ROS_DISTRO}-pinocchio`、`ros-${ROS_DISTRO}-pybind11-vendor`、`pybind11-dev`、
+`python3-numpy`、`python3-opencv` 和 `libopencv-dev`，默认 ROS 发行版为 Humble。
 
 AimDK 是机器人平台环境，需要提前安装。完整安装和构建顺序如下：
 
@@ -138,7 +138,8 @@ source ~/aimdk/install/setup.bash
 source ~/.aima/env/bashrc
 
 ./scripts/install_dependencies.sh
-colcon build --packages-select x2_grasp --symlink-install
+colcon build --packages-select x2_grasp --symlink-install \
+  --cmake-args -DCMAKE_BUILD_TYPE=Release
 source install/setup.bash
 ```
 
@@ -157,6 +158,8 @@ source install/setup.bash
 ros2 pkg prefix x2_grasp
 ros2 interface show x2_grasp/action/Grasp
 ros2 interface show x2_grasp/msg/PerceptionStatus
+/usr/bin/python3 -c \
+  'from x2_arm import native_backend_available; print(native_backend_available())'
 ```
 
 也可以根据 `scripts/robot_env.sh.example` 创建自己的环境加载脚本，避免每个终端重复输入。
@@ -186,6 +189,7 @@ ros2 interface show x2_grasp/msg/PerceptionStatus
 | 参数 | 含义 | 默认值 |
 | --- | --- | --- |
 | `gripper_reach` | 末端 frame 到夹爪抓取中心 | `0.11 m` |
+| `ik_backend` | `auto` 优先 C++，`native` 禁止回退，`python` 用于对照 | `auto` |
 | `tag_depth` | AprilTag 平面到物体中心的 +X 偏移 | `0.03 m` |
 | `standoff` | 预抓取水平后退距离 | `0.12 m` |
 | `backward` | 起始让位姿态相对当前末端的后撤距离 | `0.03 m` |

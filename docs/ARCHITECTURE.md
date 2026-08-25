@@ -7,9 +7,11 @@
 | 模块 | 职责 |
 | --- | --- |
 | `x2_grasp/` | Action、感知协调、规划编排和音频 |
-| `x2_arm/` | Pinocchio IK、轨迹、机械臂和夹爪接口 |
+| `x2_arm/` | IK 后端选择与兼容层、轨迹、机械臂和夹爪接口 |
 | `x2_common/` | 重试、并发、凭据和 PCM 公共工具 |
 | `src/localizer.cpp` | RGB-D 对齐、深度取样和 TF 定位 |
+| `src/ik_solver.cpp` | Pinocchio FK、IK、关节映射和限位数值内核 |
+| `src/ik_bindings.cpp` | pybind11 原生 IK Python 边界 |
 | `msg/`、`action/` | ROS 2 强类型契约 |
 
 ## Grasp Action 数据流
@@ -63,6 +65,29 @@ AprilTag 使用原始图像像素和相机内参执行 solvePnP，然后通过 T
 
 dry-run 和真机执行共享同一个感知与规划路径，差异只出现在硬件执行边界。这可避免调试路径与
 真实执行路径产生不同规划结果。
+
+## IK 后端
+
+`create_ik_solver()` 提供 `auto`、`native` 和 `python` 三种选择。生产入口默认 `auto`：已构建
+`_x2_ik_native` 时使用 C++17 Pinocchio，扩展不可导入时回退 Python。`native` 用于部署门禁，
+缺少扩展会直接报错；`python` 保留为一致性基线。
+
+原生后端覆盖位置、完整姿态、6D、工具轴 IK，全部 FK、配置映射和限位。普通调用只持有一份
+C++ Pinocchio 模型；调用者显式传入 `q_seed` 或 `current_head_pos` 时才惰性创建 Python
+兼容求解器。pybind11 在长 IK 调用期间释放 GIL，实例互斥量保护共享的 Pinocchio `Data`。
+左右臂一致性、失败结果、输入校验和并发访问均有回归测试。性能数据见
+[性能与 C++ 迁移](PERFORMANCE.md)。
+
+## 发布边界
+
+发布路径没有统一迁移为 C++。RGB-D 图像和定位结果属于高带宽数值链，已经由 rclcpp 发布；
+Action、感知状态、Grounding 和音频焦点是事件驱动业务，继续由 Python 管理。机械臂和夹爪
+50 Hz 连续命令流是唯一明确适合下一阶段整体迁入 rclcpp 的路径，因为其关注点是节拍、
+watchdog、停止策略和控制器契约，而不是单次 `publish()` 的计算耗时。
+
+当前 Python 发布器适用于 Demo 和 50 Hz 验证，但不是实时控制器。生产迁移必须包含调度、
+消息构造、限位后的轨迹消费、取消后的 hold/stop、看门狗和 QoS，不能只包装一个 C++ publish
+函数。详细决策和前置条件见 [发布管理](PUBLISHING.md)。
 
 ## 内置运动学模型
 

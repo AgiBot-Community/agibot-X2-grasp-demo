@@ -65,6 +65,21 @@ AprilTag 状态话题 `/x2_apriltag/status` 和 RGB-D 状态话题
 两个目标均必须使用米，并转换到 `base_link`。抓取编排器会拒绝空 frame、非有限数值和明显
 不合理的目标。
 
+## IK 解与硬件命令
+
+`x2_ik_solver_node` 只发布 IK 解和诊断，不驱动硬件：
+
+| 话题 | 类型 | 说明 |
+| --- | --- | --- |
+| `/x2_ik/left/solution` | `sensor_msgs/msg/JointState` | 左臂目标对应的完整 14 关节解 |
+| `/x2_ik/right/solution` | `sensor_msgs/msg/JointState` | 右臂目标对应的完整 14 关节解 |
+| `/x2_ik/status` | `diagnostic_msgs/msg/DiagnosticArray` | 求解成功、误差、迭代数和末端 frame |
+
+真机适配层向 `/mc/upper_body_command` 发布 AimDK `UpperBodyCommandArray`，夹爪 API 默认向
+`/aima/hal/joint/hand/command` 发布 AimDK hand command。它们是平台运行时契约，不是本包
+生成的消息；部署前必须核对当前固件中的类型、字段、QoS 和控制器超时。发布所有权和 C++
+迁移边界见 [发布管理](PUBLISHING.md)。
+
 ## 接口检查
 
 ```bash

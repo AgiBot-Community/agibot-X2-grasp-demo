@@ -6,11 +6,21 @@
 
 ```bash
 ros2 launch x2_grasp unified_grasp.launch.py \
-  mode:=<apriltag|grounding|auto> execute:=<false|true>
+  mode:=<apriltag|grounding|auto> \
+  ik_backend:=<auto|native|python> execute:=<false|true>
 ```
 
 `execute:=false` 会完成感知、目标校验和 IK 规划，但不切换机器人模式，也不发送运动轨迹。
 `execute:=true` 会控制真实机械臂和夹爪。
+
+`ik_backend:=auto` 是默认值，扩展存在时使用 C++ Pinocchio 后端，否则回退 Python。
+`ik_backend:=native` 适合部署检查，会在扩展缺失时直接失败；`python` 只建议用于一致性对照和
+故障隔离。启动后可先检查：
+
+```bash
+/usr/bin/python3 -c \
+  'from x2_arm import native_backend_available; print(native_backend_available())'
+```
 
 ## AprilTag 模式
 
@@ -97,11 +107,12 @@ ros2 run x2_grasp grasp_action_client bread
 ## 真机执行清单
 
 1. 在目标机器人上完成依赖安装、构建和完整测试。
-2. 用 `execute:=false` 分别验证所有需要使用的目标和感知模式。
-3. 检查目标 frame 为 `base_link`、单位为米、坐标在所选机械臂可达域内；默认 `arm_side:=auto`。
-4. 检查 AprilTag 尺寸、相机内参、深度尺度和 TF。
-5. 清空机械臂工作空间，确认急停、夹爪和 AimDK 控制模式正常。
-6. 使用 `execute:=true` 启动，先执行单个低风险目标。
+2. 确认 `native_backend_available()` 输出 `True`，并用 `ik_backend:=native` 完成一次 dry-run。
+3. 用 `execute:=false` 分别验证所有需要使用的目标和感知模式。
+4. 检查目标 frame 为 `base_link`、单位为米、坐标在所选机械臂可达域内；默认 `arm_side:=auto`。
+5. 检查 AprilTag 尺寸、相机内参、深度尺度和 TF。
+6. 清空机械臂工作空间，确认急停、夹爪和 AimDK 控制模式正常。
+7. 使用 `execute:=true` 启动，先执行单个低风险目标。
 
 ```bash
 ros2 launch x2_grasp unified_grasp.launch.py \

@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import sys
 import xml.etree.ElementTree as ET
 
@@ -88,6 +89,8 @@ def test_workspace_has_public_demo_and_topic_documentation() -> None:
         "INTERFACES.md",
         "CONFIGURATION.md",
         "ARCHITECTURE.md",
+        "PERFORMANCE.md",
+        "PUBLISHING.md",
         "REMOTE_API_AND_URDF.md",
         "TROUBLESHOOTING.md",
     ):
@@ -96,6 +99,32 @@ def test_workspace_has_public_demo_and_topic_documentation() -> None:
     assert "example/README.md" in readme
     assert "ActionClient" in demo
     assert "cancel_goal_async" in demo
+
+
+def test_documentation_relative_links_resolve() -> None:
+    workspace_root = PROJECT_ROOT.parents[1]
+    markdown_files = [workspace_root / "README.md"]
+    markdown_files.extend((workspace_root / "docs").glob("*.md"))
+    link_pattern = re.compile(r"\[[^]]*\]\(([^)]+)\)")
+
+    for document in markdown_files:
+        source = document.read_text(encoding="utf-8")
+        for target in link_pattern.findall(source):
+            path_text = target.split("#", 1)[0]
+            if not path_text or "://" in path_text or path_text.startswith("mailto:"):
+                continue
+            target_path = (document.parent / path_text).resolve()
+            assert target_path.exists(), f"broken link in {document}: {target}"
+
+
+def test_unified_launch_exposes_native_ik_backend_selection() -> None:
+    launch_source = (PROJECT_ROOT / "launch/unified_grasp.launch.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'DeclareLaunchArgument(\n                "ik_backend"' in launch_source
+    assert 'choices=["auto", "native", "python"]' in launch_source
+    assert '"ik_backend": ik_backend' in launch_source
 
 
 def test_workspace_has_open_source_project_metadata() -> None:

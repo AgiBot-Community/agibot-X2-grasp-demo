@@ -103,6 +103,7 @@ python3 scripts/generate_completion_tone.py
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
 | `arm_side` | `auto` | `auto` 分别验证左右臂规划并选择关节运动量较小的一侧；也可固定为 `left` 或 `right` |
+| `ik_backend` | `auto` | `auto` 优先原生 C++ 并在扩展缺失时回退；`native` 禁止回退；`python` 用于对照和排查 |
 | `gripper_reach` | `0.11` | 末端 frame 到抓取中心距离 |
 | `tag_depth` | `0.03` | 标签平面到物体中心的 X 偏移 |
 | `standoff` | `0.12` | 预抓取水平距离 |
@@ -117,11 +118,25 @@ python3 scripts/generate_completion_tone.py
 若首选侧完整分段 IK 不可解，会尝试另一侧；两侧均不可解时 Action 返回各自失败原因。这些参数与
 机器人末端 frame、夹爪结构和桌面高度直接相关，不能照搬到不同硬件。
 
+统一 launch 可直接覆盖后端：
+
+```bash
+ros2 launch x2_grasp unified_grasp.launch.py \
+  mode:=apriltag ik_backend:=native execute:=false
+```
+
+生产部署建议先用 `native` 做启动检查，确认扩展和 ABI 正常后再使用默认 `auto`。性能回归时
+必须分别显式指定 `python` 和 `native`，不要用 `auto` 代替对照组。
+
 ## 轨迹和夹爪
 
 `duration`、`approach_duration` 控制轨迹段时长。三个
 `*_grip_close_position` 参数范围为 `0.0` 到 `1.0`，其中 `0.0` 表示完全闭合，`1.0` 表示完全
 张开。应根据物体硬度和尺寸逐个标定。
+
+机械臂轨迹和夹爪命令当前按 50 Hz 发布。这个频率由硬件适配层固定，不是抓取 YAML 参数；
+修改前必须核对 AimDK 控制器期望频率、QoS 和超时策略。发布架构取舍见
+[发布管理](PUBLISHING.md)。
 
 ## Action 和执行
 

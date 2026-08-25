@@ -20,7 +20,7 @@
 [![C++](https://img.shields.io/badge/C%2B%2B-17-00599C.svg)](https://isocpp.org/)
 
 面向 X2 机器人的 ROS 2 Humble 视觉抓取功能包。项目将 AprilTag 定位、视觉 Grounding、
-RGB-D 三维定位、Pinocchio IK、机械臂控制和抓取编排整合为一个 `x2_grasp` 包，并通过标准
+RGB-D 三维定位、C++ Pinocchio IK、机械臂控制和抓取编排整合为一个 `x2_grasp` 包，并通过标准
 ROS 2 Action 对外提供可反馈、可取消的抓取接口。
 
 > 真机安全提示：首次运行必须保持 `execute:=false`。确认目标坐标、TF、IK 和轨迹均正确后，
@@ -34,6 +34,7 @@ ROS 2 Action 对外提供可反馈、可取消的抓取接口。
 - 强类型 `PerceptionStatus`，不使用 JSON 或字符串拼接状态
 - RGB-D 时间戳关联、深度帧保留、TF 转换和异常重试
 - Pinocchio 多初值 IK、分段笛卡尔路径与真机执行保护
+- C++17 Pinocchio/pybind11 原生 IK 后端，保留可对比的 Python 后端和自动回退
 - 内置面向 Demo IK 的简化 X2 URDF，无需额外 description 包即可试运行
 - 同一时间只执行一个抓取 goal，并在各执行阶段检查取消请求
 - dry-run 与真机执行使用相同规划链路
@@ -74,13 +75,14 @@ source ~/.aima/env/bashrc
 ./scripts/install_dependencies.sh
 ```
 
-安装脚本通过 apt 安装 `ros-humble-pinocchio`、`libopencv-dev`、`python3-numpy` 和
-`python3-opencv`。
+安装脚本通过 apt 安装 `ros-humble-pinocchio`、`ros-humble-pybind11-vendor`、
+`pybind11-dev`、`libopencv-dev`、`python3-numpy` 和 `python3-opencv`。
 
 ### 3. 构建
 
 ```bash
-colcon build --packages-select x2_grasp --symlink-install
+colcon build --packages-select x2_grasp --symlink-install \
+  --cmake-args -DCMAKE_BUILD_TYPE=Release
 source install/setup.bash
 ```
 
@@ -89,6 +91,8 @@ source install/setup.bash
 ```bash
 ros2 interface show x2_grasp/action/Grasp
 ros2 interface show x2_grasp/msg/PerceptionStatus
+/usr/bin/python3 -c \
+  'from x2_arm import native_backend_available; print(native_backend_available())'
 ```
 
 ### 4. 启动 dry-run
@@ -97,7 +101,7 @@ AprilTag 示例：
 
 ```bash
 ros2 launch x2_grasp unified_grasp.launch.py \
-  mode:=apriltag execute:=false
+  mode:=apriltag ik_backend:=auto execute:=false
 ```
 
 Grounding 示例：
@@ -151,7 +155,7 @@ AprilTag / Grounding / Auto arbitration
 base_link target + typed perception status
        |
        v
-Pinocchio IK and staged Cartesian planning
+C++ Pinocchio IK and staged Cartesian planning
        |
        v
 dry-run result or AimDK arm/hand execution
@@ -166,6 +170,8 @@ dry-run result or AimDK arm/hand execution
 | [接口说明](docs/INTERFACES.md) | Action、消息、Topic 和字段语义 |
 | [配置参考](docs/CONFIGURATION.md) | 视觉、IK、轨迹和音频参数 |
 | [架构说明](docs/ARCHITECTURE.md) | 模块职责、线程模型和数据流 |
+| [性能与 C++ 迁移](docs/PERFORMANCE.md) | 原生 IK 边界、左右臂逐项性能和测试条件 |
+| [发布管理](docs/PUBLISHING.md) | 发布路径分类、机械臂 C++ 发布器建议和迁移门槛 |
 | [远端 API 与内置 URDF](docs/REMOTE_API_AND_URDF.md) | 数据外发边界和简化模型适用范围 |
 | [故障排查](docs/TROUBLESHOOTING.md) | 安装、TF、视觉、IK 和执行问题 |
 | [包内说明](src/x2_grasp/README.md) | 功能包级详细说明 |
@@ -183,9 +189,9 @@ dry-run result or AimDK arm/hand execution
     |-- config/                # 统一配置
     |-- launch/                # 统一启动文件
     |-- x2_grasp/              # 感知和抓取编排
-    |-- x2_arm/                # IK、轨迹和硬件控制
+    |-- x2_arm/                # IK 后端选择、轨迹和硬件控制
     |-- x2_common/             # 公共 Python 工具
-    `-- src/                   # C++ RGB-D 定位
+    `-- src/                   # C++ RGB-D 定位和 Pinocchio IK
 ```
 
 ## 测试

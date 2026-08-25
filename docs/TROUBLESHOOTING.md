@@ -11,11 +11,33 @@ dpkg -s ros-humble-pinocchio
 不要使用 `pip install pin`。确认启动入口使用 `/usr/bin/python3`，且没有被 Conda 或用户目录
 Python 包覆盖。
 
+## 原生 IK 扩展不可用
+
+```bash
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+/usr/bin/python3 -c \
+  'from x2_arm import native_backend_available; print(native_backend_available())'
+```
+
+输出 `False` 时检查 `ros-humble-pybind11-vendor`、`pybind11-dev`，并使用 Release 重新构建。
+不要从其他 Python 版本、ROS 发行版或 CPU 架构复制 `_x2_ik_native*.so`。可临时使用
+`ik_backend:=python` 隔离扩展问题，但这不是原生性能问题的修复。
+
+```bash
+colcon build --packages-select x2_grasp --symlink-install \
+  --cmake-args -DCMAKE_BUILD_TYPE=Release
+source install/setup.bash
+ros2 launch x2_grasp unified_grasp.launch.py \
+  mode:=apriltag ik_backend:=native execute:=false
+```
+
 ## 找不到 x2_grasp 接口
 
 ```bash
 cd ~/x2_grasp_ws
-colcon build --packages-select x2_grasp --symlink-install
+colcon build --packages-select x2_grasp --symlink-install \
+  --cmake-args -DCMAKE_BUILD_TYPE=Release
 source install/setup.bash
 ros2 interface show x2_grasp/action/Grasp
 ```
@@ -94,6 +116,10 @@ ros2 run tf2_ros tf2_echo base_link <camera_optical_frame>
 - 关节和夹爪 Topic 是否与机器人固件一致
 - 是否设置了 `skip_mode_switch`
 - 是否有取消请求或上一 goal 尚未结束
+
+当前机械臂命令由 Python 适配层按 50 Hz 发布。若出现周期抖动或控制器 watchdog 超时，先检查
+系统负载、控制器期望频率、Topic QoS 和 AimDK 日志；不要通过缩短 `duration` 掩盖发布问题。
+生产级 rclcpp 发布器的建议边界见 [发布管理](PUBLISHING.md)。
 
 ## 取消后机器人仍有短暂动作
 

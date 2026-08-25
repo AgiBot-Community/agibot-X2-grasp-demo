@@ -41,7 +41,9 @@ source /opt/ros/humble/setup.bash
 
 ```text
 ros-${ROS_DISTRO}-pinocchio
+ros-${ROS_DISTRO}-pybind11-vendor
 libopencv-dev
+pybind11-dev
 python3-numpy
 python3-opencv
 ```
@@ -72,7 +74,8 @@ ros2 pkg prefix aimdk_msgs
 
 ```bash
 cd ~/x2_grasp_ws
-colcon build --packages-select x2_grasp --symlink-install
+colcon build --packages-select x2_grasp --symlink-install \
+  --cmake-args -DCMAKE_BUILD_TYPE=Release
 source install/setup.bash
 ```
 
@@ -82,6 +85,15 @@ source install/setup.bash
 ros2 pkg prefix x2_grasp
 ros2 interface show x2_grasp/action/Grasp
 ros2 interface show x2_grasp/msg/PerceptionStatus
+/usr/bin/python3 -c \
+  'from x2_arm import native_backend_available; print(native_backend_available())'
+```
+
+最后一条命令应输出 `True`。`auto` 后端在扩展可用时选择 C++；输出 `False` 时仍可回退
+Python，但性能不符合原生基准。显式要求原生后端可用：
+
+```bash
+ros2 run x2_grasp x2_ik_demo --ik-backend native --limits
 ```
 
 每个新终端都需要按 ROS 2、AimDK、当前工作区的顺序 source。
@@ -98,5 +110,6 @@ colcon test-result --verbose
 
 ## 更新源码
 
-接口、CMake 或 `package.xml` 变化后必须重新执行 `colcon build`。仅修改 Python 文件且使用
-`--symlink-install` 时通常不需要重新构建，但新脚本、新消息和新 Action 必须重新构建并 source。
+接口、CMake、C++、pybind11 或 `package.xml` 变化后必须重新执行 `colcon build`。仅修改
+Python 文件且使用 `--symlink-install` 时通常不需要重新构建，但新脚本、新消息和新 Action
+必须重新构建并 source。Release 性能数据不能用 Debug 构建复现。
