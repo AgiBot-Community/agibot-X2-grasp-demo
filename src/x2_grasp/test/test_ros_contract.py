@@ -12,7 +12,7 @@ from x2_arm.solver_node import (
     quaternion_to_rpy,
 )
 from x2_arm import ArmSide
-from x2_arm.hardware_node import joint_states_to_arm_pos
+from x2_arm.hardware_node import X2HardwareNode, joint_states_to_arm_pos
 
 
 def test_public_topic_defaults_are_stable():
@@ -82,3 +82,40 @@ def test_hardware_joint_state_mapping_is_strict():
     states[-1].position = float("inf")
     with pytest.raises(ValueError, match="non-finite"):
         joint_states_to_arm_pos(states)
+
+
+def test_arm_trajectory_preserves_latest_gripper_targets():
+    calls = []
+
+    class CommandClient:
+        def execute_hand(self, *args):
+            calls.append(("hand", args))
+            return {"success": True}
+
+        def execute_arm(self, *args):
+            calls.append(("arm", args))
+            return {
+                "frames_published": 2,
+                "frames_requested": 2,
+                "deadline_misses": 0,
+                "max_lateness_ms": 0.0,
+            }
+
+    class Logger:
+        def info(self, _message):
+            pass
+
+        def warning(self, _message):
+            pass
+
+    node = X2HardwareNode.__new__(X2HardwareNode)
+    node.command_client = CommandClient()
+    node._gripper_positions = [1.0, 1.0]
+    node.solver = type("Solver", (), {"clip_arm_pos": staticmethod(list)})()
+    node.node = type("Node", (), {"get_logger": lambda self: Logger()})()
+
+    node.set_gripper_position("left", 0.15, seconds=0.01)
+    node.publish_trajectory([0.0] * 14, [0.1] * 14, 0.1)
+
+    arm_args = next(args for kind, args in calls if kind == "arm")
+    assert arm_args[3] == pytest.approx((0.15, 1.0))

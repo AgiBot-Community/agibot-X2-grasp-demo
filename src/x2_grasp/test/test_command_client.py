@@ -30,12 +30,16 @@ def test_cpp_command_client_builds_complete_arm_segment():
     goal = [value + 0.5 for value in start]
     cancel = lambda: False
 
-    message, callback = client.execute_arm(start, goal, 2.5, cancel)
+    message, callback = client.execute_arm(
+        start, goal, 2.5, (0.2, 0.8), cancel
+    )
 
     assert message.kind == FakeGoal.ARM_TRAJECTORY
     assert message.start_arm_pos == start
     assert message.goal_arm_pos == goal
     assert message.duration == 2.5
+    assert message.left_hand_position == 0.2
+    assert message.right_hand_position == 0.8
     assert callback is cancel
 
 

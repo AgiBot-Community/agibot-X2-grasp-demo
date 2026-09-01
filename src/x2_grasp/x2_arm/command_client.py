@@ -37,12 +37,21 @@ class CppCommandClient:
     def wait_for_server(self, timeout_sec: float) -> bool:
         return bool(self.client.wait_for_server(timeout_sec=timeout_sec))
 
-    def execute_arm(self, start, goal, duration, cancel_requested=lambda: False):
+    def execute_arm(
+        self,
+        start,
+        goal,
+        duration,
+        gripper_positions,
+        cancel_requested=lambda: False,
+    ):
         message = self.action_type.Goal()
         message.kind = self.action_type.Goal.ARM_TRAJECTORY
         message.start_arm_pos = [float(value) for value in start]
         message.goal_arm_pos = [float(value) for value in goal]
         message.duration = float(duration)
+        message.left_hand_position = float(gripper_positions[0])
+        message.right_hand_position = float(gripper_positions[1])
         return self._execute(message, cancel_requested)
 
     def execute_hand(

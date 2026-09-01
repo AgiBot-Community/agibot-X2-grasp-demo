@@ -97,6 +97,7 @@ class X2HardwareNode:
         self.hand_command_topic = getattr(args, "hand_command_topic", None)
         self.hand_publish_hz = getattr(args, "hand_publish_hz", 50.0)
         self.hand_api: StandaloneHandAPI | None = None
+        self._gripper_positions = [1.0, 1.0]
         self.sequence = 0
 
     def _ensure_hand_api(self) -> StandaloneHandAPI:
@@ -118,16 +119,22 @@ class X2HardwareNode:
         """Set a left, right, or both grippers to a 0.0-1.0 position."""
 
         if self.command_client is not None:
-            return self.command_client.execute_hand(
+            result = self.command_client.execute_hand(
                 hand,
                 position if hand in {"left", "both"} else None,
                 position if hand in {"right", "both"} else None,
                 seconds,
                 cancel_requested,
             )
-        return self._ensure_hand_api().set_position(
-            hand, position, seconds=seconds, cancel_requested=cancel_requested
-        )
+        else:
+            result = self._ensure_hand_api().set_position(
+                hand, position, seconds=seconds, cancel_requested=cancel_requested
+            )
+        if hand in {"left", "both"}:
+            self._gripper_positions[0] = float(position)
+        if hand in {"right", "both"}:
+            self._gripper_positions[1] = float(position)
+        return result
 
     def open_gripper(
         self, hand: str = "both", seconds: float = 2.0, *, cancel_requested=lambda: False
@@ -169,7 +176,7 @@ class X2HardwareNode:
             raise RuntimeError("GetAllJointState request failed")
         return joint_states_to_arm_pos(future.result().arm_joints)
 
-    def make_msg(self, arm_pos: list[float], hand_open: tuple[float, float]):
+    def make_msg(self, arm_pos: list[float], gripper_positions: tuple[float, float]):
         msg = self.UpperBodyCommandArray()
         now = self.node.get_clock().now().to_msg()
         msg.header.stamp = now
@@ -179,7 +186,10 @@ class X2HardwareNode:
         msg.hand_sub_mode = 1
         msg.head_pos = [0.0, 0.0]
         msg.arm_pos = [float(v) for v in arm_pos]
-        msg.hand_pos = [float(hand_open[0]), float(hand_open[1])]
+        msg.hand_pos = [
+            float(gripper_positions[0]),
+            float(gripper_positions[1]),
+        ]
         self.sequence += 1
         return msg
 
@@ -205,7 +215,11 @@ class X2HardwareNode:
             )
         if self.command_client is not None:
             metrics = self.command_client.execute_arm(
-                safe_start, safe_goal, duration, cancel_requested
+                safe_start,
+                safe_goal,
+                duration,
+                tuple(self._gripper_positions),
+                cancel_requested,
             )
             self.node.get_logger().info(
                 "C++ command stream: "
@@ -220,7 +234,9 @@ class X2HardwareNode:
         for index, wp in enumerate(waypoints):
             if cancel_requested():
                 raise InterruptedError("trajectory canceled before completion")
-            self.publisher.publish(self.make_msg(wp.arm_pos, (1.0, 1.0)))
+            self.publisher.publish(
+                self.make_msg(wp.arm_pos, tuple(self._gripper_positions))
+            )
             self.rclpy.spin_once(self.node, timeout_sec=0.0)
             # Use wall-clock sleep here; create_rate() can stall in this
             # single-threaded publish loop before additional waypoints are sent.

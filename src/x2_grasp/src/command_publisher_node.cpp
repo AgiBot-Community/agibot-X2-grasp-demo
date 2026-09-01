@@ -165,6 +165,10 @@ class CommandPublisherNode : public rclcpp::Node {
                               const std::shared_ptr<GoalHandle> &goal_handle) {
     validate_arm(goal.start_arm_pos, "start_arm_pos");
     validate_arm(goal.goal_arm_pos, "goal_arm_pos");
+    validate_gripper_position(goal.left_hand_position,
+                              "left_hand_position");
+    validate_gripper_position(goal.right_hand_position,
+                              "right_hand_position");
     require_duration(goal.duration);
     double max_delta = 0.0;
     for (std::size_t index = 0; index < kArmJointCount; ++index) {
@@ -191,7 +195,8 @@ class CommandPublisherNode : public rclcpp::Node {
             message.arm_pos[joint] = goal.start_arm_pos[joint] +
                 (goal.goal_arm_pos[joint] - goal.start_arm_pos[joint]) * progress;
           }
-          message.hand_pos = {1.0, 1.0};
+          message.hand_pos = {goal.left_hand_position,
+                              goal.right_hand_position};
           arm_publisher_->publish(message);
           last_message = std::move(message);
           publish_feedback(goal_handle, index + 1);
@@ -288,6 +293,12 @@ class CommandPublisherNode : public rclcpp::Node {
                      [](double value) { return std::isfinite(value); })) {
       throw std::invalid_argument(std::string(name) +
                                   " contains a non-finite value");
+    }
+  }
+
+  static void validate_gripper_position(double position, const char *name) {
+    if (!finite_in_range(position, 0.0, 1.0)) {
+      throw std::invalid_argument(std::string(name) + " must be in [0, 1]");
     }
   }
 
