@@ -292,6 +292,59 @@ def _arm_slice(side):
     return slice(0, 7) if side == ArmSide.LEFT else slice(7, 14)
 
 
+def plan_holding_return(
+    node, start_result, initial_arm_pos, retract_arm_pos, args, side,
+    cancel_requested=lambda: False,
+):
+    """Plan raise, horizontal return, descent, then exact posture restoration."""
+    initial_xyz = node.solver.fk_xyz(side, initial_arm_pos)
+    start_xyz = node.solver.fk_xyz(side, start_result.arm_pos)
+    height = max(start_xyz[2], initial_xyz[2] + args.initial_upward)
+    targets = [
+        ("return_raising", [start_xyz[0], start_xyz[1], height]),
+        ("returning_high", [initial_xyz[0], initial_xyz[1], height]),
+        ("return_lowering", list(initial_xyz)),
+    ]
+    segments = []
+    seed = start_result
+    for stage, target in targets:
+        results = solve_cartesian_segment(
+            node, start_xyz, target, seed, retract_arm_pos, args, stage,
+            cancel_requested, side,
+        )
+        # Joint interpolation can bow away from Cartesian waypoints. Check
+        # the connecting curves as well, including the actual IK endpoints.
+        previous = seed.arm_pos
+        line_start = np.asarray(start_xyz, dtype=float)
+        line_delta = np.asarray(target, dtype=float) - line_start
+        length_squared = float(np.dot(line_delta, line_delta))
+        for result in results:
+            previous_array = np.asarray(previous, dtype=float)
+            delta = np.asarray(result.arm_pos, dtype=float) - previous_array
+            samples = max(20, int(math.ceil(float(np.max(np.abs(delta))) / 0.005)))
+            for fraction in np.linspace(0.0, 1.0, samples + 1):
+                _check_canceled(cancel_requested)
+                joints = (previous_array + fraction * delta).tolist()
+                xyz = np.asarray(node.solver.fk_xyz(side, joints), dtype=float)
+                progress = (
+                    float(np.dot(xyz - line_start, line_delta)) / length_squared
+                    if length_squared > 1e-12 else 0.0
+                )
+                nearest = line_start + np.clip(progress, 0.0, 1.0) * line_delta
+                if (
+                    not np.all(np.isfinite(xyz))
+                    or np.linalg.norm(xyz - nearest) > args.high_retract_position_tolerance
+                ):
+                    raise RuntimeError(
+                        f"{stage}: interpolated return path exceeds Cartesian tolerance"
+                    )
+            previous = result.arm_pos
+        segments.append((stage, results))
+        seed = results[-1]
+        start_xyz = node.solver.fk_xyz(side, seed.arm_pos)
+    return segments
+
+
 def _plan_joint_travel(plan, current_arm_pos):
     states = [
         current_arm_pos,
@@ -300,6 +353,8 @@ def _plan_joint_travel(plan, current_arm_pos):
         *(result.arm_pos for result in plan.approach_steps),
         *(result.arm_pos for result in plan.lift_steps),
         *(result.arm_pos for result in plan.high_retract_steps),
+        *(result.arm_pos for _stage, results in plan.return_segments for result in results),
+        current_arm_pos,
     ]
     active = _arm_slice(plan.side)
     return sum(
@@ -415,6 +470,10 @@ def _plan_grasp_for_side(
         cancel_requested,
         side,
     )
+    return_segments = plan_holding_return(
+        node, high_retract_results[-1] if high_retract_results else lift_results[-1],
+        list(current_arm_pos), retract_arm_pos, args, side, cancel_requested,
+    )
     return SimpleNamespace(
         side=side,
         retract=retract_result,
@@ -425,6 +484,7 @@ def _plan_grasp_for_side(
         lift_steps=lift_results,
         post_grasp=lift_results[-1],
         high_retract_steps=high_retract_results,
+        return_segments=return_segments,
         achieved_lift=achieved_lift,
     )
 

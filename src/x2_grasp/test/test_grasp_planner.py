@@ -40,6 +40,7 @@ def _plan(side, state):
         approach_steps=[result],
         lift_steps=[result],
         high_retract_steps=[],
+        return_segments=[],
     )
 
 

@@ -194,4 +194,20 @@ def execute_grasp(
             )
             high_retract_start = result.arm_pos
 
-    feedback("completed", "physical grasp sequence completed")
+    # The entire Cartesian return was validated before any hardware motion.
+    return_start = high_retract_start
+    for stage, results in plan.return_segments:
+        for index, result in enumerate(results, 1):
+            feedback(stage, f"holding object; step {index}/{len(results)}")
+            _publish_trajectory(
+                node, return_start, result.arm_pos,
+                args.duration / len(results), cancel_requested,
+            )
+            return_start = result.arm_pos
+    feedback("returning", "holding object and restoring initial arm posture")
+    _publish_trajectory(
+        node, return_start, current_arm_pos,
+        args.duration, cancel_requested,
+    )
+
+    feedback("completed", "grasp and return to initial arm posture completed")

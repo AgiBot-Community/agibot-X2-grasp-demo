@@ -429,6 +429,7 @@ def test_execute_grasp_uses_high_retract_after_lift():
         post_grasp_xyz=raised[:3],
         high_retract=SimpleNamespace(arm_pos=high_retract),
         high_retract_steps=[SimpleNamespace(arm_pos=high_retract)],
+        return_segments=[("return_lowering", [SimpleNamespace(arm_pos=retract)])],
         high_retract_xyz=high_retract[:3],
         achieved_lift=0.06,
     )
@@ -452,6 +453,8 @@ def test_execute_grasp_uses_high_retract_after_lift():
         (pre, grasp),
         (grasp, raised),
         (raised, high_retract),
+        (high_retract, retract),
+        (retract, current),
     ]
     hand_calls = [call for call in node.calls if call[0] in {"close", "open", "grip"}]
     assert all(call[1] == "left" for call in hand_calls)
@@ -535,6 +538,7 @@ def test_execute_grasp_can_finish_without_high_retract():
         post_grasp=SimpleNamespace(arm_pos=raised),
         high_retract_steps=[],
         achieved_lift=0.06,
+        return_segments=[("return_lowering", [SimpleNamespace(arm_pos=retract)])],
     )
     args = SimpleNamespace(
         bottle_grip_close_position=0.1,
@@ -550,8 +554,9 @@ def test_execute_grasp_can_finish_without_high_retract():
     execute_grasp(node, current, plan, args, "bottle")
 
     trajectories = [call for call in node.calls if call[0] == "trajectory"]
-    assert len(trajectories) == 4
-    assert trajectories[-1][2] == raised
+    assert len(trajectories) == 6
+    assert trajectories[-2][1:3] == (raised, retract)
+    assert trajectories[-1][2] == current
 
 
 def test_execute_grasp_stops_before_motion_when_action_is_canceled():
@@ -566,6 +571,7 @@ def test_execute_grasp_stops_before_motion_when_action_is_canceled():
         post_grasp=SimpleNamespace(arm_pos=[0.4] * 14),
         high_retract_steps=[],
         achieved_lift=0.06,
+        return_segments=[],
     )
     args = SimpleNamespace(
         cup_grip_close_position=0.1,
