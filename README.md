@@ -11,6 +11,12 @@
 <h1 align="center">X2 Grasp</h1>
 
 <p align="center">
+  <a href="README.md"><img src="https://img.shields.io/badge/语言-简体中文-22314E?style=for-the-badge" alt="简体中文"></a>
+  <a href="docs/README.en.md"><img src="https://img.shields.io/badge/Language-English-3776AB?style=for-the-badge" alt="English documentation"></a>
+  <a href="docs/README.fr.md"><img src="https://img.shields.io/badge/Langue-Français-0055A4?style=for-the-badge" alt="Documentation française"></a>
+</p>
+
+<p align="center">
   ROS 2 visual grasping demo for the AgiBot X2 robot
 </p>
 
@@ -54,6 +60,9 @@ ROS 2 Action 对外提供可反馈、可取消的抓取接口。
 | IK | ROS apt 提供的 Pinocchio |
 | 相机 | RGB、Depth、CameraInfo 和相机到 `base_link` 的 TF |
 
+使用与 ROS 二进制匹配的系统 Python 3.10。Pinocchio 应通过 ROS apt 软件源安装，
+不要使用 pip 版本替代；Python ABI 和 CPU 架构必须与目标环境一致。
+
 ## 快速开始
 
 ### 1. 获取源码
@@ -95,12 +104,16 @@ source install/setup.bash
 
 ```bash
 ros2 interface show x2_grasp/action/Grasp
+ros2 interface show x2_grasp/action/ExecuteCommand
 ros2 interface show x2_grasp/msg/PerceptionStatus
 /usr/bin/python3 -c \
   'from x2_arm import native_backend_available; print(native_backend_available())'
 ```
 
 ### 4. 启动 dry-run
+
+在终端 A 中选择一种模式启动。最后一条构建验证命令在原生 IK 可用时应输出 `True`；
+`ik_backend:=auto` 在扩展缺失时回退 Python，`native` 则直接报错。
 
 AprilTag 示例：
 
@@ -117,11 +130,19 @@ ros2 launch x2_grasp unified_grasp.launch.py \
   mode:=grounding execute:=false
 ```
 
+自动仲裁模式使用相同密钥，将模式改为 `mode:=auto`：每个 goal 先检查新鲜 AprilTag
+目标，不可用时调用 Grounding；机械臂执行期间不会切换来源。启动默认模式为 `grounding`。
+
 ### 5. 提交抓取任务
 
 在另一个已加载 ROS、AimDK 和工作区环境的终端执行：
 
 ```bash
+source /opt/ros/humble/setup.bash
+source ~/aimdk/install/setup.bash
+source ~/.aima/env/bashrc
+source ~/x2_grasp_ws/install/setup.bash
+
 ros2 action send_goal /x2_grasp/grasp x2_grasp/action/Grasp \
   "{target: cup}" --feedback
 ```
@@ -148,6 +169,26 @@ python3 example/send_grasp_goal.py cup
 python3 example/send_grasp_goal.py bottle --cancel-after 5
 ```
 
+取消为协作式操作。执行中会取消内部 `ExecuteCommand` Action；当 `hold_on_stop=true` 时，
+C++ 发布节点重发最后位置以保持姿态。取消无法撤销已发送的命令，也不等同于硬件急停。
+
+## 真机执行
+
+先验证原生 IK、C++ 发布节点、相机标定、标签尺寸、深度尺度和 TF，并对所需目标和模式完成
+dry-run。目标坐标必须使用 `base_link` 和米单位，位于所选机械臂可达域内。默认
+`arm_side:=auto` 评估左右臂，也可用 `left` 或 `right` 固定标定侧。
+
+清空工作空间，确认急停和 AimDK 控制模式后执行：
+
+```bash
+test -x install/x2_grasp/lib/x2_grasp/x2_command_publisher
+ros2 launch x2_grasp unified_grasp.launch.py \
+  mode:=apriltag ik_backend:=native command_backend:=native execute:=true
+```
+
+先提交单个低风险目标。`execute:=false` 仅完成感知和规划，不切换机器人模式或发送运动轨迹。
+完整流程见[运行与调用](docs/USAGE.md)。
+
 ## 工作流程
 
 ```text
@@ -167,6 +208,10 @@ dry-run result or AimDK arm/hand execution
 ```
 
 ## 文档
+
+[三语文档导航 / Documentation / Documentation trilingue](docs/README.md)
+
+项目说明提供中英法三语版本；以下专题参考文档目前为中文。
 
 | 文档 | 内容 |
 | --- | --- |
@@ -229,10 +274,12 @@ source install/setup.bash
 
 ## 配置与凭据
 
-统一配置位于 `src/x2_grasp/config/unified_grasp.yaml`。Grounding 模式优先从
+统一配置位于 [unified_grasp.yaml](src/x2_grasp/config/unified_grasp.yaml)。Grounding 模式优先从
 `ARK_API_KEY` 环境变量读取密钥，也支持权限受限的 `~/.x2_arm/api_key.yaml`。不要把真实密钥写入仓库配置文件。
 
-抓取类型也在该文件顶部统一定义。数组按下标对应，可以直接修改类型、识别描述、别名、夹爪闭合值和完成提示音：
+抓取类型也在该文件顶部统一定义。`target_names`、`target_descriptions`、
+`target_grip_close_positions` 和 `target_pcm_paths` 四个数组按下标对应、长度必须一致；
+`target_aliases` 独立使用 `别名=标准名称` 映射，不需要等长。可以按下例扩展目标：
 
 ```yaml
 target_names: [cup, bread, bottle, apple]
@@ -244,6 +291,16 @@ default_pcm_path: grasp_complete.pcm
 ```
 
 完整规则见 [配置参考](docs/CONFIGURATION.md)。
+
+## 常见问题
+
+- 找不到 Pinocchio：确认已安装 `ros-humble-pinocchio` 并加载 ROS 环境；不要用 pip 版本替代。
+- 找不到 Action：重新构建后，在当前终端加载 `install/setup.bash`。
+- goal 被拒绝：检查目标是否在配置目录中，以及是否已有活动 goal。
+- 没有目标坐标：检查相机话题、TF、AprilTag 标定；Grounding 还需检查密钥、网络和 RGB-D 时间同步。
+- dry-run 成功但真机不动作：检查 `execute`、AimDK 服务和控制模式，按[真机执行流程](docs/USAGE.md)验证。
+
+完整诊断命令见[故障排查](docs/TROUBLESHOOTING.md)。
 
 ## 许可证
 

@@ -1,5 +1,7 @@
 # X2 Grasp Examples
 
+[文档导航](../docs/README.md) · [简体中文](../README.md) · [English](../docs/README.en.md) · [Français](../docs/README.fr.md)
+
 本目录包含最小可运行 Demo。所有示例默认使用 dry-run，除非明确把 launch 参数改成
 `execute:=true`。
 
@@ -91,7 +93,7 @@ python3 example/send_grasp_goal.py cup --cancel-after 5
 
 ```bash
 ros2 launch x2_grasp unified_grasp.launch.py \
-  mode:=apriltag execute:=true
+  mode:=apriltag ik_backend:=native command_backend:=native execute:=true
 ```
 
 ```bash
@@ -102,7 +104,7 @@ python3 example/send_grasp_goal.py cup
 
 - 急停可用，机械臂工作空间无人且无障碍物
 - `/x2_apriltag/target_vector` 或 RGB-D 目标位于 `base_link`
-- 目标坐标单位为米，数值位于右臂可达范围
+- 目标坐标单位为米，数值位于所选机械臂可达范围（默认 `arm_side:=auto`）
 - dry-run 的预抓取、推进、抬升和后撤 IK 全部成功
 - 夹爪闭合参数已经按实物标定
 

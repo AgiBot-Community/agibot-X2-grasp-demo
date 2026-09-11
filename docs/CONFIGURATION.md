@@ -1,5 +1,7 @@
 # 配置参考
 
+[文档导航](README.md) · [简体中文](../README.md) · [English](README.en.md) · [Français](README.fr.md)
+
 统一配置文件为 `src/x2_grasp/config/unified_grasp.yaml`。安装后的文件位于功能包 share 目录。
 修改源码配置后需要重新构建，或在开发阶段使用 `--symlink-install`。
 
@@ -18,7 +20,9 @@
     default_pcm_path: grasp_complete.pcm
 ```
 
-五个数组按下标一一对应。`target_aliases` 使用 `别名=标准名称`，可以为空数组。名称只能使用
+`target_names`、`target_descriptions`、`target_grip_close_positions` 和 `target_pcm_paths`
+四个数组按下标一一对应且长度必须一致。`target_aliases` 独立使用 `别名=标准名称` 映射，
+不要求与目标数量相同，可以为空数组。名称只能使用
 小写字母、数字、下划线和连字符，并且必须以字母开头。
 
 例如增加苹果：
@@ -131,8 +135,8 @@ ros2 launch x2_grasp unified_grasp.launch.py \
 
 ## 轨迹和夹爪
 
-`duration`、`approach_duration` 控制轨迹段时长。三个
-`*_grip_close_position` 参数范围为 `0.0` 到 `1.0`，其中 `0.0` 表示完全闭合，`1.0` 表示完全
+`duration`、`approach_duration` 控制轨迹段时长。
+`target_grip_close_positions` 数组中的值范围为 `0.0` 到 `1.0`，其中 `0.0` 表示完全闭合，`1.0` 表示完全
 张开。应根据物体硬度和尺寸逐个标定。
 
 机械臂轨迹和夹爪命令由 `x2_command_publisher` 按 50 Hz 发布。节点参数

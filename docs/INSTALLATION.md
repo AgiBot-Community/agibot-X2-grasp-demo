@@ -1,5 +1,7 @@
 # 安装与构建
 
+[文档导航](README.md) · [简体中文](../README.md) · [English](README.en.md) · [Français](README.fr.md)
+
 ## 前置条件
 
 - Ubuntu 22.04 和 ROS 2 Humble

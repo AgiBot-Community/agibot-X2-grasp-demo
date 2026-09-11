@@ -1,5 +1,7 @@
 # 性能与 C++ 迁移
 
+[文档导航](README.md) · [简体中文](../README.md) · [English](README.en.md) · [Français](README.fr.md)
+
 ## 迁移边界
 
 仓库中的数值计算按以下边界处理：

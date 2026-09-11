@@ -1,5 +1,7 @@
 # 远端识别 API 与内置 URDF
 
+[文档导航](README.md) · [简体中文](../README.md) · [English](README.en.md) · [Français](README.fr.md)
+
 本项目同时包含远端视觉识别和本地机器人计算。部署前应明确两者的数据边界与适用范围。
 
 ## 远端识别 API

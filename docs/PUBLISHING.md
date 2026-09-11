@@ -1,5 +1,7 @@
 # 发布管理与 C++ 边界
 
+[文档导航](README.md) · [简体中文](../README.md) · [English](README.en.md) · [Français](README.fr.md)
+
 ## 结论
 
 机械臂与夹爪的 50 Hz 连续命令流已经迁入独立 rclcpp 节点 `x2_command_publisher`。迁移覆盖

@@ -1,5 +1,7 @@
 # 架构说明
 
+[文档导航](README.md) · [简体中文](../README.md) · [English](README.en.md) · [Français](README.fr.md)
+
 ## 包边界
 
 仓库只包含一个 ROS 2 包 `x2_grasp`，但在包内按职责拆分：

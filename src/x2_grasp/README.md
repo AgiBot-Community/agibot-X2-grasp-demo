@@ -1,10 +1,12 @@
 # x2_grasp
 
+[文档导航](../../docs/README.md) · [简体中文](../../README.md) · [English](../../docs/README.en.md) · [Français](../../docs/README.fr.md)
+
 X2 双臂自动选择视觉抓取的单一 ROS 2 功能包。包内包含消息接口、公共工具以及以下业务模块，
 不再需要部署其他工作空间功能包：
 
-项目级快速开始、可运行 Demo 和专题文档分别位于仓库根目录的 `README.md`、`example/` 和
-`docs/`。本文聚焦功能包内部行为与参数。
+项目级快速开始、可运行 Demo 和专题文档分别位于[项目说明](../../README.md)、
+[示例](../../example/README.md)和[文档导航](../../docs/README.md)。本文聚焦功能包内部行为与参数。
 
 - 火山方舟视觉定位 API；
 - RGB 与对齐深度图的 C++ 三维定位；
@@ -14,7 +16,7 @@ X2 双臂自动选择视觉抓取的单一 ROS 2 功能包。包内包含消息�
 其中 Grounding 目标识别使用火山方舟远端 API，RGB 图像会发送到配置的 HTTPS 服务端；
 AprilTag 检测和 RGB-D 三维定位在本地执行。包内同时内置一份面向 Pinocchio IK 的简化 X2
 URDF，不应将其当作包含碰撞、控制器和高保真网格的完整官方机器人描述。详细边界见仓库
-`docs/REMOTE_API_AND_URDF.md`。
+[远端 API 与内置 URDF](../../docs/REMOTE_API_AND_URDF.md)。
 
 ## Grasp Action
 
@@ -221,9 +223,10 @@ ros2 interface show x2_grasp/msg/PerceptionStatus
 本包会自动检测 `aimdk_msgs`、编译并安装该节点；统一 launch 在 `command_backend:=auto` 时自动
 启动它。通用开发环境未提供 `aimdk_msgs` 时只跳过该真机目标，并保留 Python 兼容路径。
 
-五个目标配置数组按下标对应，夹爪位置为 `0.0`（完全闭合）到 `1.0`（完全张开）。即使使用
+目标名称、描述、夹爪闭合值和音频路径四个数组按下标对应；别名数组使用独立映射，无需等长。
+夹爪位置为 `0.0`（完全闭合）到 `1.0`（完全张开）。即使使用
 AprilTag 模式，坐标定位不区分物品类型，最终闭合值和提示音仍按输入类型选择。完整扩展示例
-见仓库根目录 `docs/CONFIGURATION.md`。
+见[配置参考](../../docs/CONFIGURATION.md)。
 
 AprilTag 尺寸 `tag_size_m` 和以上几何参数必须按实物标定。真机前保持 `execute:=false`，并确认
 目标坐标、自动选臂结果、对应可达域和抓取轴 IK 日志全部正确。IK 严格控制位置及夹爪抓取轴方向，允许
